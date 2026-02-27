@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.venv/
+
+# Environment / secrets
+.env
+*.env
+
+# Zip artifacts
+*.zip
+
+# IDE
+.vscode/
+.idea/
