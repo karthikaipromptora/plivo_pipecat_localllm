@@ -16,8 +16,7 @@ import os
 import sys
 import urllib.parse
 from contextlib import asynccontextmanager
-
-# Allow importing from sibling directories (e.g. heplers/)
+from routers.upload import router as upload_router
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import aiohttp
@@ -106,7 +105,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-from routers.upload import router as upload_router
 app.include_router(upload_router)
 
 app.add_middleware(

@@ -16,4 +16,5 @@ dependencies = [
     "qdrant-client>=1.13.0",
     "uvicorn[standard]>=0.41.0",
     "sentence-transformers>=5.2.3",
+    "azure-cognitiveservices-speech>=1.47.0",
 ]
