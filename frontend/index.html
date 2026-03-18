@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OptiMotion — Renewal Bot</title>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f1f5f9;
+      color: #1e293b;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 228px;
+      background: #0d1f3c;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      height: 100vh;
+    }
+
+    .sidebar-brand {
+      padding: 24px 20px 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+
+    .brand-badge {
+      width: 38px;
+      height: 38px;
+      background: #2563eb;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 700;
+      font-size: 13px;
+      letter-spacing: 0.02em;
+      margin-bottom: 11px;
+    }
+
+    .brand-name {
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .brand-sub {
+      color: rgba(255,255,255,0.38);
+      font-size: 11px;
+      margin-top: 3px;
+    }
+
+    .nav { padding: 14px 12px; flex: 1; }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: none;
+      background: none;
+      color: rgba(255,255,255,0.52);
+      font-size: 13.5px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.14s;
+      margin-bottom: 2px;
+      text-align: left;
+    }
+
+    .nav-item:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.85); }
+
+    .nav-item.active { background: rgba(37,99,235,0.28); color: #fff; }
+
+    .nav-icon { font-size: 15px; width: 18px; text-align: center; }
+
+    /* ── Main ── */
+    .main {
+      flex: 1;
+      overflow-y: auto;
+      height: 100vh;
+      padding: 32px 36px;
+    }
+
+    .page { display: none; }
+    .page.active { display: block; }
+
+    .page-header { margin-bottom: 26px; }
+
+    .page-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .page-sub {
+      font-size: 13px;
+      color: #64748b;
+      margin-top: 4px;
+    }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      gap: 3px;
+      background: #e2e8f0;
+      padding: 3px;
+      border-radius: 9px;
+      width: fit-content;
+      margin-bottom: 24px;
+    }
+
+    .tab-btn {
+      padding: 7px 20px;
+      border-radius: 7px;
+      border: none;
+      background: none;
+      font-size: 13px;
+      font-weight: 500;
+      color: #64748b;
+      cursor: pointer;
+      transition: all 0.14s;
+    }
+
+    .tab-btn.active {
+      background: white;
+      color: #0f172a;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.09);
+    }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* ── Card ── */
+    .card {
+      background: white;
+      border-radius: 14px;
+      border: 1px solid #e2e8f0;
+      padding: 28px;
+      max-width: 600px;
+    }
+
+    .section-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 14px;
+    }
+
+    /* ── Upload ── */
+    .upload-area {
+      border: 2px dashed #cbd5e1;
+      border-radius: 10px;
+      padding: 36px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.15s;
+      background: #f8fafc;
+      position: relative;
+    }
+
+    .upload-area:hover, .upload-area.drag-over {
+      border-color: #2563eb;
+      background: #eff6ff;
+    }
+
+    .upload-area.file-loaded {
+      border-color: #16a34a;
+      background: #f0fdf4;
+    }
+
+    .upload-area input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .upload-icon { font-size: 28px; margin-bottom: 10px; }
+
+    .upload-text { font-size: 14px; font-weight: 500; color: #334155; }
+
+    .upload-sub { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+
+    .template-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 13px;
+      font-size: 12.5px;
+      color: #2563eb;
+      cursor: pointer;
+      font-weight: 500;
+      text-decoration: none;
+      background: none;
+      border: none;
+    }
+
+    .template-link:hover { text-decoration: underline; }
+
+    /* ── Preview ── */
+    .preview-card {
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-top: 18px;
+      display: none;
+    }
+
+    .preview-card.show { display: block; }
+
+    .preview-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: #0369a1;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 12px;
+    }
+
+    .preview-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .preview-item label {
+      font-size: 11px;
+      color: #64748b;
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .preview-item span {
+      font-size: 13.5px;
+      font-weight: 500;
+      color: #0f172a;
+    }
+
+    /* ── Form ── */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 22px;
+    }
+
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+
+    .form-group label {
+      font-size: 12.5px;
+      font-weight: 500;
+      color: #475569;
+    }
+
+    .form-group input {
+      padding: 8px 11px;
+      border: 1px solid #d1d5db;
+      border-radius: 7px;
+      font-size: 13.5px;
+      color: #0f172a;
+      outline: none;
+      transition: border-color 0.14s, box-shadow 0.14s;
+      background: white;
+    }
+
+    .form-group input:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+    }
+
+    /* ── Call Day cards ── */
+    .day-selector-label {
+      font-size: 12.5px;
+      font-weight: 500;
+      color: #475569;
+      margin-bottom: 10px;
+    }
+
+    .day-selector {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 26px;
+    }
+
+    .day-card {
+      flex: 1;
+      border: 2px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 13px 10px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.14s;
+      background: white;
+    }
+
+    .day-card:hover { border-color: #94a3b8; }
+
+    .day-card.sel-t2 { border-color: #16a34a; background: #f0fdf4; }
+    .day-card.sel-t1 { border-color: #d97706; background: #fffbeb; }
+    .day-card.sel-t0 { border-color: #dc2626; background: #fef2f2; }
+
+    .day-tag {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 3px;
+    }
+
+    .c-t2 { color: #16a34a; }
+    .c-t1 { color: #d97706; }
+    .c-t0 { color: #dc2626; }
+
+    .day-desc { font-size: 11px; color: #94a3b8; }
+
+    /* ── Badge ── */
+    .badge {
+      display: inline-block;
+      padding: 2px 9px;
+      border-radius: 20px;
+      font-size: 11.5px;
+      font-weight: 600;
+    }
+
+    .badge-t2 { background: #dcfce7; color: #16a34a; }
+    .badge-t1 { background: #fef3c7; color: #d97706; }
+    .badge-t0 { background: #fee2e2; color: #dc2626; }
+    .badge-ok { background: #dbeafe; color: #1d4ed8; }
+    .badge-fail { background: #fee2e2; color: #dc2626; }
+
+    /* ── Button ── */
+    .btn-primary {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.14s;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-primary:disabled { background: #94a3b8; cursor: not-allowed; }
+
+    /* ── Call status ── */
+    .call-status {
+      margin-top: 18px;
+      padding: 13px 16px;
+      border-radius: 9px;
+      display: none;
+      align-items: flex-start;
+      gap: 11px;
+      font-size: 13.5px;
+    }
+
+    .call-status.show { display: flex; }
+    .call-status.loading { background: #f0f9ff; border: 1px solid #bae6fd; color: #0369a1; }
+    .call-status.success { background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; }
+    .call-status.error   { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; }
+
+    .spinner {
+      width: 15px; height: 15px;
+      border: 2px solid #bae6fd;
+      border-top-color: #0369a1;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .status-uuid {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 3px;
+      font-family: monospace;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid #f1f5f9;
+      margin: 22px 0;
+    }
+
+    /* ── Logs page ── */
+    .logs-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 18px;
+    }
+
+    .btn-secondary {
+      background: white;
+      border: 1px solid #d1d5db;
+      color: #374151;
+      padding: 7px 16px;
+      border-radius: 7px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.13s;
+    }
+
+    .btn-secondary:hover { background: #f9fafb; }
+
+    .table-wrap {
+      background: white;
+      border-radius: 13px;
+      border: 1px solid #e2e8f0;
+      overflow: hidden;
+    }
+
+    table { width: 100%; border-collapse: collapse; }
+
+    thead tr { background: #f8fafc; }
+
+    th {
+      padding: 11px 16px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid #e2e8f0;
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 13px 16px;
+      font-size: 13.5px;
+      color: #334155;
+      border-bottom: 1px solid #f1f5f9;
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: #f8fafc; }
+
+    .empty-state {
+      text-align: center;
+      padding: 48px;
+      color: #94a3b8;
+      font-size: 13.5px;
+    }
+
+    .uuid-cell {
+      font-family: monospace;
+      font-size: 11.5px;
+      color: #94a3b8;
+      max-width: 150px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Sidebar ── -->
+<div class="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-badge">OM</div>
+    <div class="brand-name">OptiMotion</div>
+    <div class="brand-sub">Renewal Bot</div>
+  </div>
+  <nav class="nav">
+    <button class="nav-item active" id="nav-call" onclick="showPage('call', this)">
+      <span class="nav-icon">📞</span> Call
+    </button>
+    <button class="nav-item" id="nav-logs" onclick="showPage('logs', this)">
+      <span class="nav-icon">📋</span> Logs
+    </button>
+  </nav>
+</div>
+
+<!-- ── Main ── -->
+<div class="main">
+
+  <!-- Call Page -->
+  <div id="page-call" class="page active">
+    <div class="page-header">
+      <div class="page-title">Renewal Reminder</div>
+      <div class="page-sub">Initiate a renewal reminder call to a rider</div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="showTab('excel', this)">Excel Upload</button>
+      <button class="tab-btn" onclick="showTab('manual', this)">Manual Entry</button>
+    </div>
+
+    <!-- Excel tab -->
+    <div id="tab-excel" class="tab-content active">
+      <div class="card">
+        <div class="section-label">Upload Rider Data</div>
+
+        <div class="upload-area" id="uploadArea">
+          <input type="file" id="excelFile" accept=".xlsx,.xls,.csv" onchange="handleFile(this)" />
+          <div class="upload-icon">📄</div>
+          <div class="upload-text" id="uploadText">Click to upload or drag &amp; drop</div>
+          <div class="upload-sub">.xlsx, .xls or .csv — first row will be used</div>
+        </div>
+
+        <button class="template-link" onclick="downloadTemplate()">↓ Download sample template</button>
+
+        <div class="preview-card" id="previewCard">
+          <div class="preview-title">Preview — First Row</div>
+          <div class="preview-grid" id="previewGrid"></div>
+        </div>
+
+        <hr class="divider" />
+
+        <button class="btn-primary" id="excelCallBtn" disabled onclick="startCall('excel')">
+          📞 &nbsp;Start Call
+        </button>
+
+        <div class="call-status" id="excelStatus"></div>
+      </div>
+    </div>
+
+    <!-- Manual tab -->
+    <div id="tab-manual" class="tab-content">
+      <div class="card">
+        <div class="section-label">Rider Details</div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Phone Number</label>
+            <input type="text" id="m_phone" placeholder="+91 98765 43210" />
+          </div>
+          <div class="form-group">
+            <label>Rider Name</label>
+            <input type="text" id="m_name" placeholder="Santhosh" />
+          </div>
+          <div class="form-group">
+            <label>Vehicle Model</label>
+            <input type="text" id="m_vehicle" placeholder="EV 3" />
+          </div>
+          <div class="form-group">
+            <label>End Date</label>
+            <input type="date" id="m_date" />
+          </div>
+          <div class="form-group">
+            <label>Amount Due (₹)</label>
+            <input type="number" id="m_amount" placeholder="2000" />
+          </div>
+          <div class="form-group">
+            <label>Language</label>
+            <select id="m_language" style="padding:8px 11px;border:1px solid #d1d5db;border-radius:7px;font-size:13.5px;color:#0f172a;outline:none;background:white;">
+              <option value="English">English</option>
+              <option value="Hindi">Hindi</option>
+              <option value="Telugu">Telugu</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="day-selector-label">Call Day</div>
+        <div class="day-selector">
+          <div class="day-card" id="day-t2" onclick="selectDay('T-2', this)">
+            <div class="day-tag c-t2">T-2</div>
+            <div class="day-desc">2 days left</div>
+          </div>
+          <div class="day-card" id="day-t1" onclick="selectDay('T-1', this)">
+            <div class="day-tag c-t1">T-1</div>
+            <div class="day-desc">1 day left</div>
+          </div>
+          <div class="day-card" id="day-t0" onclick="selectDay('T0', this)">
+            <div class="day-tag c-t0">T0</div>
+            <div class="day-desc">Ends today</div>
+          </div>
+        </div>
+
+        <button class="btn-primary" onclick="startCall('manual')">
+          📞 &nbsp;Start Call
+        </button>
+
+        <div class="call-status" id="manualStatus"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Logs Page -->
+  <div id="page-logs" class="page">
+    <div class="logs-toolbar">
+      <div class="page-header" style="margin-bottom:0">
+        <div class="page-title">Call Logs</div>
+        <div class="page-sub">History of all initiated calls</div>
+      </div>
+      <button class="btn-secondary" onclick="loadLogs()">↺ &nbsp;Refresh</button>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Rider</th>
+            <th>Phone</th>
+            <th>Vehicle</th>
+            <th>Call Day</th>
+            <th>Status</th>
+            <th>UUID</th>
+          </tr>
+        </thead>
+        <tbody id="logsBody">
+          <tr><td colspan="7" class="empty-state">No calls yet</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────────
+let parsedRow  = null;
+let selectedDay = null;
+
+// ── Navigation ─────────────────────────────────────────────────────────────────
+function showPage(page, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  btn.classList.add('active');
+  if (page === 'logs') loadLogs();
+}
+
+// ── Tabs ───────────────────────────────────────────────────────────────────────
+function showTab(tab, btn) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ── Excel ──────────────────────────────────────────────────────────────────────
+function handleFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const wb   = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+    const ws   = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+    if (!rows.length) { alert('No data found in the file.'); return; }
+
+    parsedRow = normalizeRow(rows[0]);
+    showPreview(parsedRow);
+    document.getElementById('excelCallBtn').disabled = false;
+
+    const area = document.getElementById('uploadArea');
+    document.getElementById('uploadText').textContent = '✓  ' + file.name;
+    area.classList.add('file-loaded');
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function normalizeRow(row) {
+  const n = {};
+  for (const k of Object.keys(row)) n[k.trim().toLowerCase().replace(/\s+/g, '_')] = row[k];
+  return {
+    phone    : String(n['phone_number'] || n['phone'] || ''),
+    name     : String(n['rider_name']   || n['name']  || ''),
+    vehicle  : String(n['vehicle_model']|| n['vehicle']|| ''),
+    end_date : formatExcelDate(n['end_date'] || n['date'] || ''),
+    amount   : String(n['amount_due']   || n['amount']|| ''),
+    call_day : String(n['call_day']     || n['day']   || 'T-2'),
+    language : String(n['language']     || 'English'),
+  };
+}
+
+function formatExcelDate(val) {
+  if (!val) return '';
+  if (val instanceof Date) return val.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+  return String(val);
+}
+
+function showPreview(row) {
+  const dayClass = row.call_day === 'T-2' ? 'badge-t2' : row.call_day === 'T-1' ? 'badge-t1' : 'badge-t0';
+  document.getElementById('previewGrid').innerHTML = `
+    <div class="preview-item"><label>Phone</label><span>${row.phone}</span></div>
+    <div class="preview-item"><label>Rider Name</label><span>${row.name}</span></div>
+    <div class="preview-item"><label>Vehicle Model</label><span>${row.vehicle}</span></div>
+    <div class="preview-item"><label>End Date</label><span>${row.end_date}</span></div>
+    <div class="preview-item"><label>Amount Due</label><span>₹ ${row.amount}</span></div>
+    <div class="preview-item"><label>Call Day</label><span class="badge ${dayClass}">${row.call_day}</span></div>
+  `;
+  document.getElementById('previewCard').classList.add('show');
+}
+
+function downloadTemplate() {
+  const ws = XLSX.utils.aoa_to_sheet([
+    ['Phone Number', 'Rider Name', 'Vehicle Model', 'End Date', 'Amount Due', 'Call Day', 'Language'],
+    ['+919866517854', 'Santhosh', 'EV 3', '20 March 2026', '2000', 'T-2', 'English'],
+  ]);
+  ws['!cols'] = [18,15,15,18,12,8].map(w => ({ wch: w }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Riders');
+  XLSX.writeFile(wb, 'optimotion_template.xlsx');
+}
+
+// ── Call Day selector ──────────────────────────────────────────────────────────
+function selectDay(day, el) {
+  document.querySelectorAll('.day-card').forEach(c => c.classList.remove('sel-t2','sel-t1','sel-t0'));
+  selectedDay = day;
+  const cls = day === 'T-2' ? 'sel-t2' : day === 'T-1' ? 'sel-t1' : 'sel-t0';
+  el.classList.add(cls);
+}
+
+// ── Start Call ─────────────────────────────────────────────────────────────────
+async function startCall(source) {
+  let data;
+
+  if (source === 'excel') {
+    if (!parsedRow) return;
+    data = parsedRow;
+  } else {
+    const phone   = document.getElementById('m_phone').value.trim();
+    const name    = document.getElementById('m_name').value.trim();
+    const vehicle = document.getElementById('m_vehicle').value.trim();
+    const dateRaw = document.getElementById('m_date').value;
+    const amount  = document.getElementById('m_amount').value.trim();
+
+    if (!phone || !name || !vehicle || !amount || !selectedDay) {
+      alert('Please fill in all fields and select a call day.');
+      return;
+    }
+
+    const dateObj  = dateRaw ? new Date(dateRaw) : null;
+    const end_date = dateObj
+      ? dateObj.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
+      : '';
+
+    const language = document.getElementById('m_language').value;
+    data = { phone, name, vehicle, end_date, amount, call_day: selectedDay, language };
+  }
+
+  const statusEl = document.getElementById(source + 'Status');
+  setStatus(statusEl, 'loading', 'Initiating call...');
+
+  try {
+    const res = await fetch('/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phone_number: data.phone,
+        body: {
+          rider_name    : data.name,
+          vehicle_model : data.vehicle,
+          end_date      : data.end_date,
+          amount        : data.amount,
+          call_day      : data.call_day,
+          language      : data.language,
+        }
+      })
+    });
+
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.detail || 'Call failed');
+
+    setStatus(statusEl, 'success', `Call initiated — ${data.name} (${data.phone})`, result.call_uuid);
+
+  } catch (err) {
+    setStatus(statusEl, 'error', err.message);
+  }
+}
+
+function setStatus(el, type, message, uuid) {
+  el.className = 'call-status show ' + type;
+  const icon    = type === 'loading' ? '<div class="spinner"></div>' : type === 'success' ? '✅' : '❌';
+  const uuidHtml = uuid ? `<div class="status-uuid">UUID: ${uuid}</div>` : '';
+  el.innerHTML  = `${icon}<div><div>${message}</div>${uuidHtml}</div>`;
+}
+
+// ── Logs ───────────────────────────────────────────────────────────────────────
+async function loadLogs() {
+  try {
+    const res  = await fetch('/logs');
+    const logs = await res.json();
+    renderLogs(logs);
+  } catch (e) {
+    console.error('Failed to load logs:', e);
+  }
+}
+
+function renderLogs(logs) {
+  const tbody = document.getElementById('logsBody');
+  if (!logs.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No calls yet</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = [...logs].reverse().map(log => {
+    const dayClass    = log.call_day === 'T-2' ? 'badge-t2' : log.call_day === 'T-1' ? 'badge-t1' : 'badge-t0';
+    const statusClass = log.status === 'initiated' ? 'badge-ok' : 'badge-fail';
+    const time        = new Date(log.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    return `
+      <tr>
+        <td>${time}</td>
+        <td>${log.rider_name || '—'}</td>
+        <td>${log.phone_number}</td>
+        <td>${log.vehicle_model || '—'}</td>
+        <td><span class="badge ${dayClass}">${log.call_day || '—'}</span></td>
+        <td><span class="badge ${statusClass}">${log.status}</span></td>
+        <td class="uuid-cell" title="${log.call_uuid}">${log.call_uuid}</td>
+      </tr>`;
+  }).join('');
+}
+
+// ── Drag & drop ────────────────────────────────────────────────────────────────
+const uploadArea = document.getElementById('uploadArea');
+uploadArea.addEventListener('dragover',  e => { e.preventDefault(); uploadArea.classList.add('drag-over'); });
+uploadArea.addEventListener('dragleave', ()  => uploadArea.classList.remove('drag-over'));
+uploadArea.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadArea.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) {
+    const input = document.getElementById('excelFile');
+    const dt    = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    handleFile(input);
+  }
+});
+</script>
+</body>
+</html>

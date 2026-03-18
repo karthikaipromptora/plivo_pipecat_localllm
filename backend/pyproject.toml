@@ -3,18 +3,20 @@ name = "backend"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.14"
 dependencies = [
     "aiohttp>=3.9.0",
-    "deepgram-sdk>=4.7.0",
     "fastapi>=0.133.1",
     "loguru>=0.7.0",
-    "pipecat-ai[cartesia,deepgram,elevenlabs,grok,groq,openai,silero]>=0.0.103",
+    "pipecat-ai[cartesia,openai,sarvam,silero,whisper]>=0.0.103",
     "pypdf>=4.0.0",
     "python-dotenv>=1.0.0",
     "python-multipart>=0.0.22",
     "qdrant-client>=1.13.0",
     "uvicorn[standard]>=0.41.0",
     "sentence-transformers>=5.2.3",
-    "azure-cognitiveservices-speech>=1.47.0",
+    "vllm>=0.17.1",
 ]
+
+[tool.uv]
+prerelease = "allow"

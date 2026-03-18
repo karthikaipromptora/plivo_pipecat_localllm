@@ -16,17 +16,58 @@ import os
 import sys
 import urllib.parse
 from contextlib import asynccontextmanager
+from datetime import datetime
 from routers.upload import router as upload_router
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 import aiohttp
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+# ── Logging — show only what matters ─────────────────────────────────────────
+from loguru import logger as _logger
+
+_logger.remove()
+
+def _log_filter(record):
+    level = record["level"].no   # DEBUG=10 INFO=20 WARNING=30 ERROR=40
+    name  = record["name"]
+    msg   = record["message"]
+
+    if level >= 30:                                          # always show WARNING+
+        return True
+    if name.startswith(("heplers", "routers", "__main__")): # our code: INFO+
+        return level >= 20
+    if "TTFB" in msg:                                        # STT / LLM / TTS timing
+        return True
+    if "transcript=" in msg:                                 # Sarvam live transcription
+        return True
+    if "Transcription: [" in msg:                            # Whisper transcription
+        return True
+    if "STT: [" in msg:                                      # clean transcript line
+        return True
+    if "Generating TTS" in msg:                              # bot response text
+        return True
+    return False
+
+_logger.add(
+    sys.stderr,
+    filter=_log_filter,
+    format="<green>{time:HH:mm:ss.SSS}</green> | <level>{level:<8}</level> | {message}",
+    colorize=True,
+)
+# ───────────────────────────────────────────────────────────────────────────
+
 
 load_dotenv(override=True)
+
+# In-memory call log (resets on server restart)
+call_logs: list[dict] = []
+
+# Path to the frontend UI
+_FRONTEND_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "index.html")
 
 
 # ----------------- HELPERS ----------------- #
@@ -116,6 +157,18 @@ app.add_middleware(
 )
 
 
+@app.get("/")
+async def serve_ui() -> FileResponse:
+    """Serve the OptiMotion demo UI."""
+    return FileResponse(_FRONTEND_PATH)
+
+
+@app.get("/logs")
+async def get_logs() -> JSONResponse:
+    """Return all call log entries."""
+    return JSONResponse(call_logs)
+
+
 @app.post("/start")
 async def initiate_outbound_call(request: Request) -> JSONResponse:
     """Handle outbound call request and initiate call via Plivo."""
@@ -179,6 +232,20 @@ async def initiate_outbound_call(request: Request) -> JSONResponse:
     except Exception as e:
         print(f"Unexpected error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+
+    # Store in call log
+    call_logs.append({
+        "timestamp": datetime.now().isoformat(),
+        "rider_name": body_data.get("rider_name", ""),
+        "phone_number": phone_number,
+        "vehicle_model": body_data.get("vehicle_model", ""),
+        "end_date": body_data.get("end_date", ""),
+        "amount": body_data.get("amount", ""),
+        "call_day": body_data.get("call_day", ""),
+        "language": body_data.get("language", ""),
+        "call_uuid": call_uuid,
+        "status": "initiated",
+    })
 
     return JSONResponse(
         {
@@ -263,6 +330,38 @@ async def get_answer_xml(
     except Exception as e:
         print(f"Error generating answer XML: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate XML: {str(e)}")
+
+
+@app.api_route("/inbound", methods=["GET", "POST"])
+async def inbound_call(
+    request: Request,
+    CallUUID: str = Query(None),
+    From: str = Query(None),
+    To: str = Query(None),
+) -> HTMLResponse:
+    """Handle inbound call from Plivo — return Stream XML to connect to WebSocket."""
+    if request.method == "POST":
+        form = await request.form()
+        if not CallUUID:
+            CallUUID = form.get("CallUUID")
+        if not From:
+            From = form.get("From")
+        if not To:
+            To = form.get("To")
+
+    print(f"Inbound call: {From} → {To}, UUID: {CallUUID}")
+
+    host = request.headers.get("host")
+    ws_url = f"wss://{host}/ws"
+
+    xml_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Stream bidirectional="true" keepCallAlive="true" contentType="audio/x-mulaw;rate=8000">
+        {ws_url}
+    </Stream>
+</Response>"""
+
+    return HTMLResponse(content=xml_content, media_type="application/xml")
 
 
 @app.websocket("/ws")

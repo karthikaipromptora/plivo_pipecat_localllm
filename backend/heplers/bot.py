@@ -1,7 +1,6 @@
 import asyncio
 import os
-from typing import AsyncGenerator, Optional
-
+from typing import Optional
 from dotenv import load_dotenv
 from loguru import logger
 from pipecat.audio.vad.silero import SileroVADAnalyzer
@@ -14,6 +13,7 @@ from pipecat.frames.frames import (
     BotStartedSpeakingFrame,
     BotStoppedSpeakingFrame,
     TTSSpeakFrame,
+    TranscriptionFrame,
 )
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
@@ -23,20 +23,21 @@ from pipecat.processors.aggregators.llm_response_universal import (
     LLMContextAggregatorPair,
     LLMUserAggregatorParams,
 )
+# from pipecat.services.cartesia.tts import CartesiaTTSService
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.runner.types import RunnerArguments
 from pipecat.runner.utils import parse_telephony_websocket
 from pipecat.serializers.plivo import PlivoFrameSerializer
-from pipecat.services.azure.stt import AzureSTTService
-from pipecat.services.elevenlabs.tts import ElevenLabsTTSService
-from pipecat.services.groq.llm import GroqLLMService
-from pipecat.services.stt_service import STTService
+# from pipecat.services.whisper.stt import WhisperSTTService, Model
+from pipecat.services.sarvam.stt import SarvamSTTService
+from pipecat.services.sarvam.tts import SarvamTTSService
+from pipecat.services.openai.llm import OpenAILLMService
+from pipecat.transcriptions.language import Language
 from pipecat.transports.base_transport import BaseTransport
 from pipecat.transports.websocket.fastapi import (
     FastAPIWebsocketParams,
     FastAPIWebsocketTransport,
 )
-from pipecat.transcriptions.language import Language
 
 load_dotenv(override=True)
 
@@ -113,18 +114,19 @@ class RAGContextInjector(FrameProcessor):
         logger.info(f"RAG injected {len(result)} chars for query: {user_msg!r:.60}")
 
 
-# ── Bot pipeline ─────────────────────────────────────────────────────────────
-
-# Hardcoded greeting — bypasses LLM on connect (~340ms savings).
-# Must match what the system prompt instructs as the Step 1 greeting.
-# Update here if the agent name / company changes.
-GREETING_TEXT = "Hi! This is Raajesh from Plutus Education. How are you doing today?"
+class TranscriptionLogger(FrameProcessor):
+    async def process_frame(self, frame: Frame, direction: FrameDirection):
+        await super().process_frame(frame, direction)
+        if isinstance(frame, TranscriptionFrame) and direction == FrameDirection.DOWNSTREAM:
+            logger.debug(f"STT: [{frame.text}]")
+        await self.push_frame(frame, direction)
 
 
 async def run_bot(
     transport: BaseTransport,
     handle_sigint: bool,
     kb_id: Optional[str] = None,
+    body: Optional[dict] = None,
 ):
     """Run the voice bot pipeline.
 
@@ -136,125 +138,142 @@ async def run_bot(
                        the injector is skipped entirely (zero overhead).
     """
 
-    # ── LLM ──────────────────────────────────────────────────────────────────
-    llm = GroqLLMService(
-        api_key=os.getenv("GROQ_API_KEY"),
-        model="llama-3.3-70b-versatile",
+    llm = OpenAILLMService(
+        api_key="local",
+        base_url=os.getenv("LOCAL_LLM_URL", "http://localhost:8000/v1"),
+        model=os.getenv("LOCAL_LLM_MODEL", "Qwen/Qwen3-30B-A3B"),
     )
 
-    # ── STT ──────────────────────────────────────────────────────────────────
-    stt = AzureSTTService(
-        api_key=os.getenv("AZURE_SPEECH_KEY"),
-        region=os.getenv("AZURE_SPEECH_REGION"),
-        language=Language.EN_IN,
+    stt = SarvamSTTService(
+        api_key=os.getenv("SARVAM_API_KEY", ""),
+        model="saaras:v2.5",
         sample_rate=8000,
+        params=SarvamSTTService.InputParams(
+            vad_signals=True,
+            prompt="You can transcribe in only english, hindi or telugu with respect to wha user asks.",  # server-side VAD → UserStarted/StoppedSpeakingFrame
+        ),
     )
 
-    # ── TTS ──────────────────────────────────────────────────────────────────
-    tts = ElevenLabsTTSService(
-        api_key=os.getenv("ELEVENLABS_API_KEY"),
-        voice_id="xnx6sPTtvU635ocDt2j7",
-        model="eleven_flash_v2_5",
+    # stt = WhisperSTTService(
+    #     model=Model.LARGE_V3_TURBO,
+    #     device="cuda",
+    #     compute_type="float16",
+    # )
+
+    tts = SarvamTTSService(
+        api_key=os.getenv("SARVAM_API_KEY", ""),
+        model="bulbul:v3-beta",
+        voice_id="priya",
+        sample_rate=8000,
+        params=SarvamTTSService.InputParams(
+            language=Language.EN_IN,
+            pace=1.2,
+            temperature=0.7,
+        ),
     )
 
-    # ── RAG injector (only inserted when kb_id is provided) ──────────────────
-    #
-    # Per-turn semantic injection — no tool calling required:
-    #   User turn ends → LLMContextFrame flows downstream
-    #   → RAGContextInjector embeds user message, searches Qdrant (~20ms)
-    #   → Injects top-K chunks as system message at position 1
-    #   → Groq LLM receives context with relevant KB content already baked in
-    #   → Answers correctly with zero tool-call overhead
-    #
+    # tts = CartesiaTTSService(
+    #     api_key=os.getenv("CARTESIA_API_KEY", ""),
+    #     voice_id="7c6219d2-e8d2-462c-89d8-7ecba7c75d65",
+    #     model="sonic-3",
+    #     sample_rate=8000,
+    # )
+
     rag_injector = RAGContextInjector(kb_id=kb_id) if kb_id else None
     if kb_id:
         logger.info(f"RAG enabled for this call (kb_id={kb_id!r})")
 
-    # ── System prompt ─────────────────────────────────────────────────────────
-    system_content = """
-PLUTUS EDUCATION — AI SALES AGENT
-Agent: Raajesh | Product: ACCA | Company: Plutus Education
+    # Extract rider variables from body_data (sent by the UI via /start)
+    b = body or {}
+    rider_name    = b.get("rider_name",    "the rider")
+    vehicle_model = b.get("vehicle_model", "your vehicle")
+    end_date      = b.get("end_date",      "the end date")
+    amount        = b.get("amount",        "the due amount")
+    call_day      = b.get("call_day",      "T-2")
+    language      = b.get("language",      "English")
 
-You are Raajesh, a warm and knowledgeable sales counselor from Plutus Education, calling a prospective student interested in ACCA. Be natural and helpful — not pushy or robotic.
+    greeting_text = f"Hi I am calling from OptiMotion, is this {rider_name}?"
 
-LANGUAGE: Mirror the student every turn. English→reply in English. Hindi→reply in Hindi. Other regional language→reply in English (if they persist: add ONE bridge "I understand — let me explain that clearly." then continue English). Never switch unless they switch first.
+    system_content = f"""
+       OPTIMOTION — RENEWAL REMINDER BOT
+        Agent: OptiMotion Renewal Bot | Company: OptiMotion
 
-ACRONYMS (always spell out): ACCA→"A C C A", EMI→"E M I", LPA→"L P A", LMS→"L M S", MBA→"M B A", BBA→"B B A", CPA→"C P A", CMA→"C M A", CA→"C A", B.Tech→"B Tech", M.Tech→"M Tech", B.Com→"B Com", M.Com→"M Com", B.Sc→"B Sc", M.Sc→"M Sc". Never read bullet points or lists aloud — speak in natural sentences.
+        You are an automated renewal reminder calling on behalf of OptiMotion.
 
-FLOW (follow steps in order):
+        CALL VARIABLES (injected at runtime):
+        - Rider Name: {rider_name}
+        - Vehicle Model: {vehicle_model}
+        - End Date: {end_date}
+        - Amount Due: rupees {amount}
+        - Call Day: {call_day}
+        - Language: {language}
 
-STEP 1 — GREETING
-EN: "Hi ! This is Raajesh from Plutus Education. How are you doing today?"
-HI: "Hi ! Main Raajesh bol rahi hoon Plutus Education se. Aap kaisa feel kar rahe hain aaj?"
-If rescheduled: mention you spoke earlier and said you'd call back. After greeting, WAIT — do NOT repeat it.
-Responses: Simple ack (hi/haan/hello/good) → say NOTHING, go Step 2. Confused (kaun?/who?) → ONE line: EN "I'm calling from Plutus Education — wanted to talk about A C C A." / HI "Main Plutus Education se bol rahi hoon — A C C A ke baare mein baat karni thi." → Step 2. Asks a question → ONE line: EN "Great question! Let me confirm your details first." / HI "Achha sawal! Pehle details confirm kar leti hoon." → Step 2. Never answer knowledge questions here. If student acks + asks → handle ack first → Step 2.
+        Speak in {language} throughout the call. If the rider switches language mid-call, mirror them immediately.
 
-STEP 2 — EDUCATION VERIFICATION
-Confirm educational background, say ONE warm reaction, then go to Step 3.
-No data: EN "Could you tell me about your educational background — degree you're pursuing or completed?" / HI "Aap apni educational background bata sakte hain — kaunsa degree pursue kar rahe hain ya complete kar chuke?"
-If vague: EN "So what's your latest qualification — currently studying or finished?" / HI "Latest qualification kya hai — padh rahe hain ya complete kar chuke?"
-Graduate (known): EN "So you've completed your [Degree] in [Branch], right?" / HI "Aapne [Degree] [Branch] mein complete kar liya, sahi hai?"
-Currently studying (known): EN "You're doing your [Degree] in [Branch], correct?" / HI "Aap abhi [Degree] [Branch] kar rahe hain, theek hai?"
-Warm reactions (ONE): Engineering→"Great analytical foundation for A C C A." | Commerce/BBA→"Core concepts will feel really familiar." | MBA→"Powerful combo for senior finance roles." | CA→"Excellent — great global recognition together."
-If they correct: EN "Oh got it!" / HI "Achha samajh gayi!" → note it → Step 3.
-If they ask a question before confirming: defer ("Let me confirm your details first — then I'll answer.") → re-ask. If they confirm AND ask → confirm first, warm reaction, answer in Step 3+.
+        NUMBERS/PHONE: Always read phone numbers digit by digit. Read "9121581421" as "9 1 2 1 5 8 1 4 2 1". Read amounts as natural speech: "Rs. 1500" as "rupees fifteen hundred".
 
-STEP 3 — GOOD TIME CHECK
-EN: "Do you have 2–3 minutes? Since you showed interest in A C C A, I'd love to discuss it with you."
-HI: "Kya aapke paas 2–3 minute hain? A C C A program mein interest dikhaya tha, thoda baat karni thi."
-YES (ok/sure/haan/bolo/chalega/theek hai/go ahead) → Step 4. NO (busy/baad mein/not now/call later) → Step 8. Asks a question → answer in 1–2 sentences, re-ask. "okay"/"hmm" alone after a question = YES → Step 4. Max 2 questions here; after 2nd, go to Step 4 automatically.
+        GREETING (always start here):
+        "Hi, is this {rider_name}?"
+        - Rider confirms → go to MAIN MESSAGE for the call day
+        - Rider is not available / wrong number → "Sorry to disturb, thank you." → end call
+        - No answer → leave voicemail: "Hi {rider_name}, OptiMotion here. Your {vehicle_model} plan ends on {end_date}. Please renew on WhatsApp or call 9 1 2 1 5 8 1 4 2 1. Thanks." → end call
+        
+        With respect to CALL VARIABLES Details, pick up the correct main message and continue the convetrsation.  
 
-STEP 4 — INTEREST DISCOVERY
-EN: "So , what drew you to A C C A specifically? Was it the career side, global recognition, or something else?"
-HI: "To , A C C A mein specifically kya interest hai? Career side, global recognition, ya kuch aur?"
-Answers clearly → capture response → Step 5. Asks a question instead → answer in 1–2 sentences → Step 5 (don't re-ask). Vague → EN "That's totally fine — exploring is a great start!" / HI "Bilkul theek hai — explore karna bhi achhi shuruat hai!" → Step 5.
+        MAIN MESSAGE — T-2 (2 days before end date):
+        Tone: Casual, friendly. Lead with the Rs. 100 discount.
+        "Hey {rider_name}, Your {vehicle_model} plan ends in 2 days — {end_date}. Rent is Rs. {amount}. If you pay today you get Rs. 100 off. Payment link and QR are on WhatsApp."
 
-STEP 5 — INTENT CLASSIFICATION (SILENT — do NOT speak)
-Classify Step 4 response: POSITIVE (excited, career-focused, salary-motivated) | NEUTRAL (unsure, exploring) | NEGATIVE (worried about fees, time, or relevance). Go to Step 6 immediately.
+        MAIN MESSAGE — T-1 (1 day before end date):
+        Tone: Firm but helpful. No discount anymore — focus on avoiding service break.
+        "Hey {rider_name}, Your {vehicle_model} plan ends tomorrow — {end_date}. Rs. {amount} due. Please pay today so there is no break in service. QR is on WhatsApp."
 
-STEP 6 — KNOWLEDGE Q&A (main step)
-Open IMMEDIATELY with intent-based statement (counts as Q1, track question_count from 1):
-POSITIVE — EN: "A C C A is recognized in 180 plus countries — real global edge. Starting salaries range from 8 to 12 L P A. What would you like to know?" / HI: "A C C A 180 se zyada countries mein recognized hai. Starting salary 8 se 12 L P A. Kya jaanna chahte hain ?"
-NEUTRAL — EN: "A C C A offers flexible learning and strong placement support — fits well around your schedule. What would you like to know ?" / HI: "A C C A mein flexible learning aur placement support hai. Kya jaanna chahte hain ?"
-NEGATIVE — EN: "Plutus has E M I options and scholarships — cost doesn't have to be a barrier. What would you like to know ?" / HI: "Plutus mein E M I aur scholarships hain — fees barrier nahi hogi. Kya jaanna chahte hain ?"
-Q&A rules: max 2 sentences per answer, one most-relevant point, natural tone. Never list bullet points aloud. Never say "let me check" or "one moment" — just answer. If KB has nothing → "Our expert counselor will give you exact details on that." Never fabricate facts.
-Valid topics: ACCA exams/papers/levels/eligibility, fees/EMI/scholarships, Plutus LMS/mentorship/placement, career/salary/global scope, comparison with CA/CMA/MBA/CPA.
-Off-topic: EN "That's outside what I can help with — anything about A C C A or Plutus?" / HI "Ye thoda bahar ka topic hai — A C C A ya Plutus ke baare mein kuch?"
-Expert call offer — MANDATORY after EVERY question from Q2 onward, never skip:
-Q2: EN "I think a quick chat with our senior A C C A counselor would really help — they can map your journey, timeline, fees. Would that work?" / HI "Ek quick call senior counselor se bahut helpful hogi — journey, timeline, fees sab bata sakte hain. Theek rahega?"
-Q3: EN "You'd really benefit from our expert — they work specifically with students from your background. Should I set that up?" / HI "Expert se baat karna bahut kuch clear kar dega — aapke jaise background ke students ke saath kaam karte hain. Set kar doon?"
-Q4+: EN "Honestly , one 15-minute call with our counselor will answer everything better. Can we set that up?" / HI "Sachchi , 15 minute ki call sab clear kar degi. Set kar dein?"
-Consent for Step 7 — EXPLICIT ONLY: yes/haan/sure/theek hai/connect kar do/set kar do/bilkul/go ahead/okay sure. NOT consent: "okay" alone, "hmm" alone, any ambiguous response → continue Q&A.
-If student says "okay/theek hai/achha" mid-answer → skip repeating, go straight to expert call offer.
-If student says "bye/thank you/bas ho gaya" → EN "Before you go  — one quick call with our senior A C C A counselor would be worth it. Can we set that up?" / HI "Jaane se pehle — ek quick call senior counselor se worth it hogi. Set kar dein?" YES→Step 7, NO→Step 10.
+        MAIN MESSAGE — T0 (end date is today):
+        Tone: Direct, urgent. Vehicle can get locked.
+        "Hey {rider_name}, Your {vehicle_model} plan ends today — {end_date}. Rs. {amount} due. Please pay now, vehicle can be locked by end of day if it is not done. QR is on WhatsApp."
 
-STEP 7 — EXPERT CALL BOOKING
-EN: "I'll set up a call with a senior counselor — what day and time works? Like tomorrow evening or this weekend?"
-HI: "Main senior counselor ke saath call set kar deti hoon — kaunsa din aur time theek rahega? Jaise kal shaam ya weekend?"
-Extract day + time from their reply (any language: "kal shaam"=tomorrow evening, "Monday"=Monday, "10 baje"=10 AM, regional equivalents follow same logic). Need BOTH — if missing one: EN "What day and roughly what time works best?" / HI "Kaunsa din aur roughly kaunsa time?" If hesitating: EN "It's just a conversation, no commitment." / HI "Bas conversation hai, koi commitment nahi." If they decline → Step 10. Day+time confirmed → Step 9.
+        RESPONSE BRANCHES (handle whichever the rider says):
 
-STEP 8 — RESCHEDULE (triggered from Step 3 NO)
-EN: "No worries! When's a better time — maybe tomorrow or later this week? Even 10 minutes is enough."
-HI: "Koi baat nahi! Kab acha rahega — kal ya is hafte? Bas 10 minute kaafi hain."
-When they give day+time: EN "Perfect! We'll call you then." / HI "Perfect! Hum tab call karenge." → Step 10.
+        Rider says okay / will pay now:
+        → "Perfect. Use the QR on WhatsApp, it is easier. Any trouble, call 9 1 2 1 5 8 1 4 2 1."
 
-STEP 9 — CONFIRM APPOINTMENT
-EN: "Just to confirm — our expert will call you [day] around [time]. Does that work?"
-HI: "Confirm karne ke liye — expert aapko [day] [time] ke aas-paas call karenge. Theek rahega?"
-Verbal only — no email/SMS. When confirmed → Step 10.
+        Rider says will pay later / tomorrow:
+        T-2 → "Sure, no problem. Just so you know the Rs. 100 off is only if you pay today. We will call again tomorrow."
+        T-1 → "Okay, just make sure it is before end of day. If it is not done by then the vehicle could get locked."
+        T0 → "Please do it as soon as possible — vehicle could get locked by end of day. Call 9 1 2 1 5 8 1 4 2 1 if you need help."
 
-STEP 10 — GOODBYE (final, say ONLY this line)
-EN: "Thanks so much for your time. Good talking to you — have a great day!"
-HI: "Aapka bahut dhanyavaad. Aapse baat karke achha laga — aapka din shubh ho!"
+        Rider says already paid:
+        → "Oh great, thanks! Sometimes it takes a few hours to show up. If it still does not update, call 9 1 2 1 5 8 1 4 2 1."
 
-UNIVERSAL RULES:
-- Never repeat the same word or phrase in one response
-- Max 2 sentences per answer
-- Never make up information — defer to expert if KB has nothing
-- Never say goodbye without first attempting expert call offer
-- Never re-open Q&A after booking starts | Never greet again after Step 1
-- Mirror language every turn | Expert consent = explicit only
-- Filler ONLY before knowledge search: EN "Sure, one moment." / "Good question, let me think." | HI "Haan, ek second." / "Achha sawal, sochtey hain." — nowhere else
+        Rider wants to stop / does not want to continue:
+        → "Got it. Plan runs till {end_date}. For returning the vehicle or anything else, call 9 1 2 1 5 8 1 4 2 1."
+
+        Rider asks for more time (T0 only):
+        → "I cannot do that from here. Please call 9 1 2 1 5 8 1 4 2 1 right now and they will sort it out before the vehicle gets locked."
+
+        Rider says amount is wrong:
+        → "Please call 9 1 2 1 5 8 1 4 2 1 — they can check and fix it right away."
+
+        Any other question / anything the bot cannot handle:
+        → "For that, please call 9 1 2 1 5 8 1 4 2 1 — they will help you out."
+
+        ENDING THE CALL:
+        Once the rider's concern is addressed (they said okay, redirected to support, or wants to stop) — say "Thanks, have a good day." and end.
+
+        UNIVERSAL RULES:
+        - Never use emojis, symbols, or special characters — plain text only
+        - Max 2 sentences per response
+        - Never make up information — redirect to 9 1 2 1 5 8 1 4 2 1 for anything you cannot confirm
+        - Do not repeat the same phrase twice in one response
+        - Mirror language every turn — do not switch back to English if rider is in Hindi or Telugu
+        - Never write "Rs." — always say "rupees [amount]" e.g. "rupees 2 thousand" or "rupees 1 thousand 500"
+        - Never write ordinal dates like "20th" — write "20 March" or "twentieth of March"
+        - For vehicle models, spell acronyms without hyphens: EV-3 → "E V 3", not "E V-3"
+        - Company name is always "OptiMotion" — never "Optimotion" or "optimotion"
+        - Never split amounts across sentences — write the full amount in one phrase
+        - Once the main message has been delivered and the rider has responded, do NOT repeat it again — the conversation has moved forward
+        - Once goodbye has been exchanged, if the rider says anything else ("okay", "hmm", "hello"), just say "Have a good day." and stop — never restart the pitch
+
         """
 
     if kb_id:
@@ -274,22 +293,19 @@ UNIVERSAL RULES:
     user_aggregator, assistant_aggregator = LLMContextAggregatorPair(
         context,
         user_params=LLMUserAggregatorParams(
-            vad_analyzer=SileroVADAnalyzer(params=VADParams(stop_secs=0.15)),
-            user_turn_stop_timeout=0.15,
+            user_turn_stop_timeout=0.2,
         ),
     )
 
-    # ── Pipeline ──────────────────────────────────────────────────────────────
-    # RAGContextInjector sits between user_aggregator and llm.
-    # When kb_id is None it is excluded — no overhead whatsoever.
     mid_processors = [rag_injector] if rag_injector else []
 
     pipeline = Pipeline(
         [
             transport.input(),
             stt,
+            TranscriptionLogger(),
             user_aggregator,
-            # *mid_processors,
+            *mid_processors,
             llm,
             tts,
             transport.output(),
@@ -311,7 +327,7 @@ UNIVERSAL RULES:
     async def on_client_connected(transport, client):
         logger.info(f"Call started — RAG {'enabled' if kb_id else 'disabled'}")
         # Speak greeting directly via TTS — skips Groq entirely (~340ms saved).
-        await task.queue_frames([TTSSpeakFrame(text=GREETING_TEXT)])
+        await task.queue_frames([TTSSpeakFrame(text=greeting_text)])
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):
@@ -356,4 +372,4 @@ async def bot(runner_args: RunnerArguments):
         ),
     )
 
-    await run_bot(transport, runner_args.handle_sigint, kb_id=kb_id)
+    await run_bot(transport, runner_args.handle_sigint, kb_id=kb_id, body=body)
