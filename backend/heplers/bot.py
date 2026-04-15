@@ -7,6 +7,7 @@ from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
 from pipecat.frames.frames import (
     Frame,
+    EndFrame,
     LLMContextFrame,
     LLMRunFrame,
     StartFrame,
@@ -16,6 +17,7 @@ from pipecat.frames.frames import (
     TranscriptionFrame,
 )
 from pipecat.pipeline.pipeline import Pipeline
+from pipecat.services.cartesia.tts import CartesiaTTSService
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
 from pipecat.processors.aggregators.llm_context import LLMContext
@@ -23,14 +25,15 @@ from pipecat.processors.aggregators.llm_response_universal import (
     LLMContextAggregatorPair,
     LLMUserAggregatorParams,
 )
-# from pipecat.services.cartesia.tts import CartesiaTTSService
+from pipecat.services.elevenlabs.tts import ElevenLabsTTSService
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.runner.types import RunnerArguments
 from pipecat.runner.utils import parse_telephony_websocket
-from pipecat.serializers.plivo import PlivoFrameSerializer
+# from pipecat.serializers.plivo import PlivoFrameSerializer
+from pipecat.serializers.vobiz import VobizFrameSerializer
 # from pipecat.services.whisper.stt import WhisperSTTService, Model
 from pipecat.services.sarvam.stt import SarvamSTTService
-from pipecat.services.sarvam.tts import SarvamTTSService
+
 from pipecat.services.openai.llm import OpenAILLMService
 from pipecat.transcriptions.language import Language
 from pipecat.transports.base_transport import BaseTransport
@@ -118,8 +121,11 @@ class TranscriptionLogger(FrameProcessor):
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
         if isinstance(frame, TranscriptionFrame) and direction == FrameDirection.DOWNSTREAM:
-            logger.debug(f"STT: [{frame.text}]")
+            logger.debug(f"STT: [{frame.text}] | lang: {frame.language}")
         await self.push_frame(frame, direction)
+
+
+
 
 
 async def run_bot(
@@ -127,6 +133,7 @@ async def run_bot(
     handle_sigint: bool,
     kb_id: Optional[str] = None,
     body: Optional[dict] = None,
+    transcript_out: Optional[list] = None,
 ):
     """Run the voice bot pipeline.
 
@@ -140,17 +147,17 @@ async def run_bot(
 
     llm = OpenAILLMService(
         api_key="local",
-        base_url=os.getenv("LOCAL_LLM_URL", "http://localhost:8000/v1"),
-        model=os.getenv("LOCAL_LLM_MODEL", "Qwen/Qwen3-30B-A3B"),
+        base_url=os.getenv("LOCAL_LLM_URL", "http://164.52.198.104:8049/v1"),
+        model=os.getenv("LOCAL_LLM_MODEL", "Qwen/Qwen3-14B"),
     )
 
     stt = SarvamSTTService(
         api_key=os.getenv("SARVAM_API_KEY", ""),
-        model="saaras:v2.5",
+        model="saaras:v3",
         sample_rate=8000,
         params=SarvamSTTService.InputParams(
             vad_signals=True,
-            prompt="You can transcribe in only english, hindi or telugu with respect to wha user asks.",  # server-side VAD → UserStarted/StoppedSpeakingFrame
+            mode="transcribe",  # transcribe in original language — no translation to English
         ),
     )
 
@@ -160,120 +167,231 @@ async def run_bot(
     #     compute_type="float16",
     # )
 
-    tts = SarvamTTSService(
-        api_key=os.getenv("SARVAM_API_KEY", ""),
-        model="bulbul:v3-beta",
-        voice_id="priya",
-        sample_rate=8000,
-        params=SarvamTTSService.InputParams(
-            language=Language.EN_IN,
-            pace=1.2,
-            temperature=0.7,
-        ),
-    )
+    # Extract rider variables from body_data (sent by the UI via /start)
+    from num2words import num2words
 
-    # tts = CartesiaTTSService(
-    #     api_key=os.getenv("CARTESIA_API_KEY", ""),
-    #     voice_id="7c6219d2-e8d2-462c-89d8-7ecba7c75d65",
-    #     model="sonic-3",
-    #     sample_rate=8000,
-    # )
+    b = body or {}
+    rider_name    = b.get("rider_name",    "the rider")
+    vehicle_model = b.get("vehicle_model", "your vehicle")
+    end_date      = b.get("end_date",      "the end date")
+    call_day      = b.get("call_day",      "T-2")
+    language      = b.get("language",      "English")
+
+    # Convert amount to English cardinal words so LLM never sees a numeral
+    _amount_raw = str(b.get("amount", "")).strip()
+    try:
+        amount = num2words(int(_amount_raw), lang="en")   # e.g. "two thousand"
+    except (ValueError, TypeError):
+        amount = _amount_raw or "the due amount"
+
+    # Convert end_date to spoken English words so LLM never translates it
+    # Input: "20 March 2025" or "2025-03-20" → "twenty March twenty twenty five"
+    def _date_to_words(raw: str) -> str:
+        from datetime import datetime
+        raw = raw.strip()
+        if not raw or raw == "the end date":
+            return raw
+        dt = None
+        for fmt in ("%d %B %Y", "%d %b %Y", "%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+            try:
+                dt = datetime.strptime(raw, fmt)
+                break
+            except ValueError:
+                continue
+        if dt is None:
+            return raw  # fallback: return as-is
+        day_word   = num2words(dt.day, lang="en")           # "twenty"
+        month_word = dt.strftime("%B")                      # "March"
+        year       = dt.year                                # 2025
+        # Split year into two halves: 2025 → "twenty" + "twenty five"
+        century, decade = divmod(year, 100)
+        if decade == 0:
+            year_word = num2words(century, lang="en") + " hundred"  # "twenty hundred"
+        else:
+            year_word = num2words(century, lang="en") + " " + num2words(decade, lang="en")  # "twenty twenty five"
+        return f"{day_word} {month_word} {year_word}"
+
+    end_date_words = _date_to_words(str(end_date))
+
+    agent_name   = "Rajesh"
+    agent_gender = "male"
+
+    if language == "Telugu":
+        tts = CartesiaTTSService(
+            api_key=os.getenv("CARTESIA_API_KEY", ""),
+            voice_id="6baae46d-1226-45b5-a976-c7f9b797aae2",
+            model="sonic-3",
+            sample_rate=8000,
+        )
+        logger.info(f"TTS: Cartesia sonic-3 (Telugu, {call_day})")
+    else:
+        tts = ElevenLabsTTSService(
+            api_key=os.getenv("ELEVENLABS_API_KEY", ""),
+            voice_id="xnx6sPTtvU635ocDt2j7",
+            model="eleven_flash_v2_5",
+            sample_rate=8000,
+        )
+        logger.info(f"TTS: ElevenLabs eleven_flash_v2_5 ({language}, {call_day})")
 
     rag_injector = RAGContextInjector(kb_id=kb_id) if kb_id else None
     if kb_id:
         logger.info(f"RAG enabled for this call (kb_id={kb_id!r})")
 
-    # Extract rider variables from body_data (sent by the UI via /start)
-    b = body or {}
-    rider_name    = b.get("rider_name",    "the rider")
-    vehicle_model = b.get("vehicle_model", "your vehicle")
-    end_date      = b.get("end_date",      "the end date")
-    amount        = b.get("amount",        "the due amount")
-    call_day      = b.get("call_day",      "T-2")
-    language      = b.get("language",      "English")
+    hindi_verb    = "बोल रही हूँ" if agent_gender == "female" else "बोल रहा हूँ"
+    greetings = {
+        "English": f"Hi I am {agent_name} from OptiMotion, is this {rider_name}?",
+        "Hindi":   f"नमस्ते, मैं {agent_name} {hindi_verb} OptiMotion से, क्या आप {rider_name} बोल रहे ?",
+        "Telugu":  f"హలో, నేను {agent_name} ని, OptiMotion నుండి. మీరు {rider_name} గారు మాట్లాడుతున్నారా?",
+    }
+    greeting_text = greetings.get(language, greetings["English"])
 
-    greeting_text = f"Hi I am calling from OptiMotion, is this {rider_name}?"
+    # ── Shared blocks (embedded in each per-day template) ─────────────────────
 
-    system_content = f"""
-       OPTIMOTION — RENEWAL REMINDER BOT
-        Agent: OptiMotion Renewal Bot | Company: OptiMotion
+    _common_context = f"""
+        CALL CONTEXT:
+        - Rider: {rider_name}
+        - Vehicle: {vehicle_model}
+        - Plan End Date: {end_date_words}  ← say EXACTLY "{end_date_words}" — do NOT translate to Hindi or Telugu
+        - Amount Due: {amount} rupees  ← say EXACTLY "{amount} rupees" — do NOT translate "{amount}" to any other language
 
-        You are an automated renewal reminder calling on behalf of OptiMotion.
+        PAYMENT INFO:
+        - Amount due: {amount} rupees
+        - How to pay: QR code and payment link sent on WhatsApp
+    """
 
-        CALL VARIABLES (injected at runtime):
-        - Rider Name: {rider_name}
-        - Vehicle Model: {vehicle_model}
-        - End Date: {end_date}
-        - Amount Due: rupees {amount}
-        - Call Day: {call_day}
-        - Language: {language}
+    _common_conversation_rules = f"""
+        HOW TO HANDLE THE CONVERSATION:
 
-        Speak in {language} throughout the call. If the rider switches language mid-call, mirror them immediately.
+        BEFORE EVERY RESPONSE — read the full conversation history and ask yourself:
+          "What exactly did the rider just say? Have I already said this in a previous turn?"
+          Never repeat information you already gave. Each response must directly address what the rider just said.
+          you already introduced, do not intruduce yourself again
 
-        NUMBERS/PHONE: Always read phone numbers digit by digit. Read "9121581421" as "9 1 2 1 5 8 1 4 2 1". Read amounts as natural speech: "Rs. 1500" as "rupees fifteen hundred".
+        STEP 1 — Confirm identity:
+          Wrong number or not available → apologize briefly, say goodbye, STOP.
 
-        GREETING (always start here):
-        "Hi, is this {rider_name}?"
-        - Rider confirms → go to MAIN MESSAGE for the call day
-        - Rider is not available / wrong number → "Sorry to disturb, thank you." → end call
-        - No answer → leave voicemail: "Hi {rider_name}, OptiMotion here. Your {vehicle_model} plan ends on {end_date}. Please renew on WhatsApp or call 9 1 2 1 5 8 1 4 2 1. Thanks." → end call
-        
-        With respect to CALL VARIABLES Details, pick up the correct main message and continue the convetrsation.  
+        STEP 2 — State the purpose ONCE:
+          Mention the due amount and the WhatsApp payment link EXACTLY ONCE in the entire call.
+          After you have mentioned the link — do NOT bring it up again, even if the rider says "okay" or "I'll pay".
 
-        MAIN MESSAGE — T-2 (2 days before end date):
-        Tone: Casual, friendly. Lead with the Rs. 100 discount.
-        "Hey {rider_name}, Your {vehicle_model} plan ends in 2 days — {end_date}. Rent is Rs. {amount}. If you pay today you get Rs. 100 off. Payment link and QR are on WhatsApp."
+        STEP 3 — Respond to what the rider actually said:
+          a) Rider agrees / says they'll pay / says "okay" / says "alright":
+             → One short acknowledgement + goodbye. STOP. Do NOT repeat the WhatsApp link. Do NOT say "let me know once you pay."
+          b) Rider says already paid:
+             → Appreciate it, say it may take a few hours to reflect, say goodbye, STOP.
+          c) Rider REFUSES to pay or disputes the amount:
+             → Do NOT argue. Say "I'll raise this with our support team they'll call you back soon." ask them if they have any more questions and end the call.
+          d) Rider says vehicle is not working / has a problem / raises any complaint:
+             → Say "I'll pass this to our support team right away they'll call you back".  ask them if they have any more questions and end the call, Say goodbye, STOP.
+          e) Rider goes off-topic or asks something unrelated:
+             → Acknowledge briefly, say "I'll pass this to our support team, they'll get back to you." Say goodbye, STOP.
+          f) Rider is rude, silent, or keeps repeating the same thing:
+             → Politely say goodbye, STOP.
 
-        MAIN MESSAGE — T-1 (1 day before end date):
-        Tone: Firm but helpful. No discount anymore — focus on avoiding service break.
-        "Hey {rider_name}, Your {vehicle_model} plan ends tomorrow — {end_date}. Rs. {amount} due. Please pay today so there is no break in service. QR is on WhatsApp."
+        Never make up information not provided above.
+        AMOUNT RULE — CRITICAL: The amount is "{amount} rupees". Say it EXACTLY as "{amount} rupees". NEVER translate "{amount}" into Hindi or Telugu.
+        Correct Hindi: "आपका {amount} rupees बकाया है।" — WRONG: "आपका दो हज़ार रुपये बकाया है।"
+        Correct Telugu: "మీకు {amount} రూపాయలు బాకీ ఉంది" — WRONG: "మీకు రెండు వేల రూపాయలు బాకీ ఉంది"
+    """
 
-        MAIN MESSAGE — T0 (end date is today):
-        Tone: Direct, urgent. Vehicle can get locked.
-        "Hey {rider_name}, Your {vehicle_model} plan ends today — {end_date}. Rs. {amount} due. Please pay now, vehicle can be locked by end of day if it is not done. QR is on WhatsApp."
+    _language_block = f"""
+        STRICTLY LANGUAGE — Always respond in the SAME language the user is currently speaking. Detect it from their message and match it immediately. If they switch language mid-call, switch with them in the very next response If you receive hindi text as input strictly return hindi text, if you receive english text as input strictly return english text, if you receive telugu text as input strictly return telugu text. YOU CAN GENERATE RESPONSE ONLY IN 3 LANGUAGES ENGLISH, HINDI, OR TELUGU. NO OTHER LANGUAGE.
 
-        RESPONSE BRANCHES (handle whichever the rider says):
+        NUMBERS RULE — applies in every language, never break this:
+        - Amount: always say "{amount} rupees" — NEVER translate "{amount}" into Hindi or Telugu words
+        - Date: always say "{end_date_words}" — NEVER translate into Hindi or Telugu words
 
-        Rider says okay / will pay now:
-        → "Perfect. Use the QR on WhatsApp, it is easier. Any trouble, call 9 1 2 1 5 8 1 4 2 1."
+        ── English rules ──
+        Style: Plain, warm, conversational — not scripted.
+        CORRECT: "Your payment of {amount} rupees is due today."
 
-        Rider says will pay later / tomorrow:
-        T-2 → "Sure, no problem. Just so you know the Rs. 100 off is only if you pay today. We will call again tomorrow."
-        T-1 → "Okay, just make sure it is before end of day. If it is not done by then the vehicle could get locked."
-        T0 → "Please do it as soon as possible — vehicle could get locked by end of day. Call 9 1 2 1 5 8 1 4 2 1 if you need help."
+        ── Hindi rules ──
+        Style: Warm, casual Hinglish — natural and human, not call-center robotic.
+        Script: Devanagari only.
+        Gendered grammar: agent is {agent_gender} → use {"बोल रही हूँ" if agent_gender == "female" else "बोल रहा हूँ"}.
+        MANDATORY substitutions — always use English, never the Hindi equivalent:
+          भुगतान → pay | भुगतान करें → pay करें | कृपया → please
+        CORRECT: "please WhatsApp पर भेजे गए link से {amount} rupees pay करें।"
+        WRONG:   "कृपया दो हज़ार रुपये का भुगतान करें।"
 
-        Rider says already paid:
-        → "Oh great, thanks! Sometimes it takes a few hours to show up. If it still does not update, call 9 1 2 1 5 8 1 4 2 1."
+        ── Telugu rules ──
+        Style: Casual Hyderabadi Telugu mixed with English words. Never use formal or pure Telugu.
+        Script: Telugu script only.
+        MANDATORY substitutions — always use the English word:
+          వాహనం → vehicle | చెల్లింపు → pay | చెల్లించండి → pay చేయండి
+          దయచేసి → please | ధన్యవాదాలు → thank you | సేవ → service
+          ప్రణాళిక → plan | సమాచారం → information
+        CORRECT: "please WhatsApp లో పంపిన link ద్వారా {amount} rupees pay చేయండి."
+        WRONG:   "దయచేసి రెండు వేల రూపాయలు చెల్లించండి."
+    """
 
-        Rider wants to stop / does not want to continue:
-        → "Got it. Plan runs till {end_date}. For returning the vehicle or anything else, call 9 1 2 1 5 8 1 4 2 1."
+    _format_rules = """
+        FORMATTING RULES:
+        - Plain text only — no emojis, no symbols, no markdown
+        - Max 2 sentences per response — this is a voice call, keep it short
+        - Never write "Rs." — always say "rupees" in words
+        - Vehicle model without hyphens: EV-3 → E V 3
+        - Company name is always "OptiMotion"
+    """
 
-        Rider asks for more time (T0 only):
-        → "I cannot do that from here. Please call 9 1 2 1 5 8 1 4 2 1 right now and they will sort it out before the vehicle gets locked."
+    # ── Per-day templates ──────────────────────────────────────────────────────
 
-        Rider says amount is wrong:
-        → "Please call 9 1 2 1 5 8 1 4 2 1 — they can check and fix it right away."
+    if call_day == "T0":
+        system_content = f"""
+        You are {agent_name}, a {agent_gender} collection agent calling on behalf of OptiMotion.
+        You are calling {rider_name} about their {vehicle_model} subscription plan — payment is due TODAY.
 
-        Any other question / anything the bot cannot handle:
-        → "For that, please call 9 1 2 1 5 8 1 4 2 1 — they will help you out."
+        YOUR SITUATION:
+        Today is the payment due date. The rider has not paid yet.
+        Be direct and warm — sound like a real human, not a robot. Slightly impatient but polite.
+        Do NOT mention vehicle locking in this call.
 
-        ENDING THE CALL:
-        Once the rider's concern is addressed (they said okay, redirected to support, or wants to stop) — say "Thanks, have a good day." and end.
+        YOUR GOAL:
+        State the due amount and WhatsApp payment link ONCE. Then listen and respond to what the rider says.
+        Do NOT loop back or repeat — one mention, one response, close the call.
+        {_common_context}
+        {_common_conversation_rules}
+        {_language_block}
+        {_format_rules}
+        """
 
-        UNIVERSAL RULES:
-        - Never use emojis, symbols, or special characters — plain text only
-        - Max 2 sentences per response
-        - Never make up information — redirect to 9 1 2 1 5 8 1 4 2 1 for anything you cannot confirm
-        - Do not repeat the same phrase twice in one response
-        - Mirror language every turn — do not switch back to English if rider is in Hindi or Telugu
-        - Never write "Rs." — always say "rupees [amount]" e.g. "rupees 2 thousand" or "rupees 1 thousand 500"
-        - Never write ordinal dates like "20th" — write "20 March" or "twentieth of March"
-        - For vehicle models, spell acronyms without hyphens: EV-3 → "E V 3", not "E V-3"
-        - Company name is always "OptiMotion" — never "Optimotion" or "optimotion"
-        - Never split amounts across sentences — write the full amount in one phrase
-        - Once the main message has been delivered and the rider has responded, do NOT repeat it again — the conversation has moved forward
-        - Once goodbye has been exchanged, if the rider says anything else ("okay", "hmm", "hello"), just say "Have a good day." and stop — never restart the pitch
+    elif call_day == "T-1":
+        system_content = f"""
+        You are {agent_name}, a {agent_gender} collection agent calling on behalf of OptiMotion.
+        You are calling {rider_name} about their {vehicle_model} subscription — payment was due YESTERDAY and has not been received.
 
+        YOUR SITUATION:
+        Payment is 1 day overdue the subscription day was {end_date_words}, today its 1 day after subscription date. If the rider does not pay TODAY, their vehicle will be locked tomorrow.
+        Be firm and direct. Slightly annoyed but still professional. Sound like a real human — not a call-center robot.
+        A touch of dry humour is okay — e.g. "better late than never, right?" — but keep it brief.
+
+        YOUR GOAL:
+        Make the situation clear ONCE — pay today or vehicle locks tomorrow. Then respond to what the rider says and close.
+        Do NOT keep restating the deadline after you've said it once.
+        {_common_context}
+        {_common_conversation_rules}
+        {_language_block}
+        {_format_rules}
+        """
+
+    else:  # T-2
+        system_content = f"""
+        You are {agent_name}, a {agent_gender} collection agent calling on behalf of OptiMotion.
+        You are calling {rider_name} about their {vehicle_model} subscription — payment is 2 days overdue and the vehicle is NOW LOCKED.
+
+        YOUR SITUATION:
+        The vehicle is locked. The rider needs to pay {amount} rupees immediately to unlock it. The subscription date was {end_date_words}, today its 2 day after subscription date.
+        Be very firm and urgent. You are clearly not happy. Sound like a real, slightly frustrated human.
+        Dry humour is okay — e.g. "I'm sure you enjoy walking, but let's fix this." — but do NOT soften the message.
+        The vehicle IS locked. State it clearly, ONCE.
+
+        YOUR GOAL:
+        Inform them the vehicle is locked, state the amount and WhatsApp link ONCE, then respond to what they say and close.
+        Do NOT repeat the lock warning or the amount after you've said it once.
+        {_common_context}
+        {_common_conversation_rules}
+        {_language_block}
+        {_format_rules}
         """
 
     if kb_id:
@@ -283,9 +401,12 @@ async def run_bot(
             "NEVER invent job details not present in the provided context."
         )
 
+    logger.info(f"SYSTEM PROMPT ({'─'*60})\n{system_content}\n{'─'*70}")
+
     messages = [
         {"role": "system", "content": system_content},
         {"role": "user", "content": "begin"},
+        {"role": "assistant", "content": greeting_text},
     ]
 
     context = LLMContext(messages)
@@ -334,14 +455,38 @@ async def run_bot(
         logger.info("Call ended")
         await task.cancel()
 
+    @transport.event_handler("on_session_timeout")
+    async def on_session_timeout(transport, websocket):
+        logger.info("Call timeout at 55s — wrapping up")
+        farewells = {
+            "English": "I need to wrap up now. Thank you for your time, have a great day!",
+            "Hindi":   "मुझे अभी बात समाप्त करनी होगी। आपका समय देने के लिए धन्यवाद, शुभ दिन!",
+            "Telugu":  "నేను ఇప్పుడు ముగించాలి. మీ సమయానికి ధన్యవాదాలు, శుభదినం!",
+        }
+        farewell_text = farewells.get(language, farewells["English"])
+        await task.queue_frame(TTSSpeakFrame(text=farewell_text))
+        await asyncio.sleep(7)
+        await task.queue_frame(EndFrame())
+
     runner = PipelineRunner(handle_sigint=handle_sigint)
-    await runner.run(task)
+    try:
+        await runner.run(task)
+    finally:
+        # Snapshot transcript regardless of how the call ended (timeout, hangup, error).
+        # Runs after pipeline stops — zero latency impact on the live call.
+        if transcript_out is not None and not transcript_out:
+            for msg in context._messages[2:]:
+                role    = msg.get("role", "")
+                content = msg.get("content", "")
+                if role in ("user", "assistant") and isinstance(content, str) and content.strip():
+                    transcript_out.append({"role": role, "text": content})
+            logger.info(f"Transcript snapshot: {len(transcript_out)} turns")
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 
-async def bot(runner_args: RunnerArguments):
+async def bot(runner_args: RunnerArguments, transcript_out: Optional[list] = None):
     """Main bot entry point compatible with Pipecat Cloud."""
 
     transport_type, call_data = await parse_telephony_websocket(runner_args.websocket)
@@ -355,11 +500,21 @@ async def bot(runner_args: RunnerArguments):
     else:
         logger.info("No kb_id — RAG disabled for this call")
 
-    serializer = PlivoFrameSerializer(
+    # serializer = PlivoFrameSerializer(
+    #     stream_id=call_data["stream_id"],
+    #     call_id=call_data["call_id"],
+    #     auth_id=os.getenv("PLIVO_AUTH_ID", ""),
+    #     auth_token=os.getenv("PLIVO_AUTH_TOKEN", ""),
+    # )
+    serializer = VobizFrameSerializer(
         stream_id=call_data["stream_id"],
         call_id=call_data["call_id"],
-        auth_id=os.getenv("PLIVO_AUTH_ID", ""),
-        auth_token=os.getenv("PLIVO_AUTH_TOKEN", ""),
+        auth_id=os.getenv("VOBIZ_AUTH_ID", ""),
+        auth_token=os.getenv("VOBIZ_AUTH_TOKEN", ""),
+        params=VobizFrameSerializer.InputParams(
+            vobiz_sample_rate=8000,
+            auto_hang_up=True,
+        ),
     )
 
     transport = FastAPIWebsocketTransport(
@@ -369,7 +524,8 @@ async def bot(runner_args: RunnerArguments):
             audio_out_enabled=True,
             add_wav_header=False,
             serializer=serializer,
+            session_timeout=55,
         ),
     )
 
-    await run_bot(transport, runner_args.handle_sigint, kb_id=kb_id, body=body)
+    await run_bot(transport, runner_args.handle_sigint, kb_id=kb_id, body=body, transcript_out=transcript_out)

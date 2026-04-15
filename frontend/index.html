@@ -1,12 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>OptiMotion — Renewal Bot</title>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -29,7 +34,7 @@
 
     .sidebar-brand {
       padding: 24px 20px 20px;
-      border-bottom: 1px solid rgba(255,255,255,0.07);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
     }
 
     .brand-badge {
@@ -54,12 +59,15 @@
     }
 
     .brand-sub {
-      color: rgba(255,255,255,0.38);
+      color: rgba(255, 255, 255, 0.38);
       font-size: 11px;
       margin-top: 3px;
     }
 
-    .nav { padding: 14px 12px; flex: 1; }
+    .nav {
+      padding: 14px 12px;
+      flex: 1;
+    }
 
     .nav-item {
       display: flex;
@@ -70,7 +78,7 @@
       border-radius: 8px;
       border: none;
       background: none;
-      color: rgba(255,255,255,0.52);
+      color: rgba(255, 255, 255, 0.52);
       font-size: 13.5px;
       font-weight: 500;
       cursor: pointer;
@@ -79,11 +87,21 @@
       text-align: left;
     }
 
-    .nav-item:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.85); }
+    .nav-item:hover {
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 255, 255, 0.85);
+    }
 
-    .nav-item.active { background: rgba(37,99,235,0.28); color: #fff; }
+    .nav-item.active {
+      background: rgba(37, 99, 235, 0.28);
+      color: #fff;
+    }
 
-    .nav-icon { font-size: 15px; width: 18px; text-align: center; }
+    .nav-icon {
+      font-size: 15px;
+      width: 18px;
+      text-align: center;
+    }
 
     /* ── Main ── */
     .main {
@@ -93,10 +111,17 @@
       padding: 32px 36px;
     }
 
-    .page { display: none; }
-    .page.active { display: block; }
+    .page {
+      display: none;
+    }
 
-    .page-header { margin-bottom: 26px; }
+    .page.active {
+      display: block;
+    }
+
+    .page-header {
+      margin-bottom: 26px;
+    }
 
     .page-title {
       font-size: 20px;
@@ -136,11 +161,16 @@
     .tab-btn.active {
       background: white;
       color: #0f172a;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.09);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.09);
     }
 
-    .tab-content { display: none; }
-    .tab-content.active { display: block; }
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
 
     /* ── Card ── */
     .card {
@@ -172,7 +202,8 @@
       position: relative;
     }
 
-    .upload-area:hover, .upload-area.drag-over {
+    .upload-area:hover,
+    .upload-area.drag-over {
       border-color: #2563eb;
       background: #eff6ff;
     }
@@ -191,11 +222,22 @@
       height: 100%;
     }
 
-    .upload-icon { font-size: 28px; margin-bottom: 10px; }
+    .upload-icon {
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
 
-    .upload-text { font-size: 14px; font-weight: 500; color: #334155; }
+    .upload-text {
+      font-size: 14px;
+      font-weight: 500;
+      color: #334155;
+    }
 
-    .upload-sub { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+    .upload-sub {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-top: 4px;
+    }
 
     .template-link {
       display: inline-flex;
@@ -211,7 +253,9 @@
       border: none;
     }
 
-    .template-link:hover { text-decoration: underline; }
+    .template-link:hover {
+      text-decoration: underline;
+    }
 
     /* ── Preview ── */
     .preview-card {
@@ -223,7 +267,9 @@
       display: none;
     }
 
-    .preview-card.show { display: block; }
+    .preview-card.show {
+      display: block;
+    }
 
     .preview-title {
       font-size: 11px;
@@ -261,7 +307,11 @@
       margin-bottom: 22px;
     }
 
-    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
 
     .form-group label {
       font-size: 12.5px;
@@ -282,7 +332,7 @@
 
     .form-group input:focus {
       border-color: #2563eb;
-      box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
     }
 
     /* ── Call Day cards ── */
@@ -310,11 +360,24 @@
       background: white;
     }
 
-    .day-card:hover { border-color: #94a3b8; }
+    .day-card:hover {
+      border-color: #94a3b8;
+    }
 
-    .day-card.sel-t2 { border-color: #16a34a; background: #f0fdf4; }
-    .day-card.sel-t1 { border-color: #d97706; background: #fffbeb; }
-    .day-card.sel-t0 { border-color: #dc2626; background: #fef2f2; }
+    .day-card.sel-t0 {
+      border-color: #16a34a;
+      background: #f0fdf4;
+    }
+
+    .day-card.sel-t1 {
+      border-color: #d97706;
+      background: #fffbeb;
+    }
+
+    .day-card.sel-t2 {
+      border-color: #dc2626;
+      background: #fef2f2;
+    }
 
     .day-tag {
       font-size: 17px;
@@ -322,11 +385,22 @@
       margin-bottom: 3px;
     }
 
-    .c-t2 { color: #16a34a; }
-    .c-t1 { color: #d97706; }
-    .c-t0 { color: #dc2626; }
+    .c-t0 {
+      color: #16a34a;
+    }
 
-    .day-desc { font-size: 11px; color: #94a3b8; }
+    .c-t1 {
+      color: #d97706;
+    }
+
+    .c-t2 {
+      color: #dc2626;
+    }
+
+    .day-desc {
+      font-size: 11px;
+      color: #94a3b8;
+    }
 
     /* ── Badge ── */
     .badge {
@@ -337,11 +411,45 @@
       font-weight: 600;
     }
 
-    .badge-t2 { background: #dcfce7; color: #16a34a; }
-    .badge-t1 { background: #fef3c7; color: #d97706; }
-    .badge-t0 { background: #fee2e2; color: #dc2626; }
-    .badge-ok { background: #dbeafe; color: #1d4ed8; }
-    .badge-fail { background: #fee2e2; color: #dc2626; }
+    .badge-t0 {
+      background: #dcfce7;
+      color: #16a34a;
+    }
+
+    .badge-t1 {
+      background: #fef3c7;
+      color: #d97706;
+    }
+
+    .badge-t2 {
+      background: #fee2e2;
+      color: #dc2626;
+    }
+
+    .badge-ok {
+      background: #dbeafe;
+      color: #1d4ed8;
+    }
+
+    .badge-fail {
+      background: #fee2e2;
+      color: #dc2626;
+    }
+
+    .badge-positive {
+      background: #dcfce7;
+      color: #15803d;
+    }
+
+    .badge-negative {
+      background: #fee2e2;
+      color: #dc2626;
+    }
+
+    .badge-neutral {
+      background: #f1f5f9;
+      color: #64748b;
+    }
 
     /* ── Button ── */
     .btn-primary {
@@ -359,8 +467,14 @@
       gap: 7px;
     }
 
-    .btn-primary:hover { background: #1d4ed8; }
-    .btn-primary:disabled { background: #94a3b8; cursor: not-allowed; }
+    .btn-primary:hover {
+      background: #1d4ed8;
+    }
+
+    .btn-primary:disabled {
+      background: #94a3b8;
+      cursor: not-allowed;
+    }
 
     /* ── Call status ── */
     .call-status {
@@ -373,13 +487,31 @@
       font-size: 13.5px;
     }
 
-    .call-status.show { display: flex; }
-    .call-status.loading { background: #f0f9ff; border: 1px solid #bae6fd; color: #0369a1; }
-    .call-status.success { background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; }
-    .call-status.error   { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; }
+    .call-status.show {
+      display: flex;
+    }
+
+    .call-status.loading {
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      color: #0369a1;
+    }
+
+    .call-status.success {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      color: #15803d;
+    }
+
+    .call-status.error {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #dc2626;
+    }
 
     .spinner {
-      width: 15px; height: 15px;
+      width: 15px;
+      height: 15px;
       border: 2px solid #bae6fd;
       border-top-color: #0369a1;
       border-radius: 50%;
@@ -388,7 +520,11 @@
       margin-top: 1px;
     }
 
-    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
 
     .status-uuid {
       font-size: 11px;
@@ -426,7 +562,9 @@
       transition: background 0.13s;
     }
 
-    .btn-secondary:hover { background: #f9fafb; }
+    .btn-secondary:hover {
+      background: #f9fafb;
+    }
 
     .table-wrap {
       background: white;
@@ -435,9 +573,14 @@
       overflow: hidden;
     }
 
-    table { width: 100%; border-collapse: collapse; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
 
-    thead tr { background: #f8fafc; }
+    thead tr {
+      background: #f8fafc;
+    }
 
     th {
       padding: 11px 16px;
@@ -458,8 +601,13 @@
       border-bottom: 1px solid #f1f5f9;
     }
 
-    tr:last-child td { border-bottom: none; }
-    tbody tr:hover { background: #f8fafc; }
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tbody tr:hover {
+      background: #f8fafc;
+    }
 
     .empty-state {
       text-align: center;
@@ -468,242 +616,832 @@
       font-size: 13.5px;
     }
 
-    .uuid-cell {
-      font-family: monospace;
-      font-size: 11.5px;
+    .takeaway-cell {
+      font-size: 12.5px;
+      color: #475569;
+      max-width: 200px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    tbody tr {
+      cursor: pointer;
+    }
+
+    tbody tr:hover td {
+      background: #f0f6ff;
+    }
+
+    /* ── Modal overlay ── */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 18, 40, 0.55);
+      backdrop-filter: blur(3px);
+      -webkit-backdrop-filter: blur(3px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal-card {
+      background: white;
+      border-radius: 18px;
+      width: 100%;
+      max-width: 600px;
+      max-height: 84vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.22);
+      overflow: hidden;
+    }
+
+    .modal-header {
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid #f1f5f9;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .modal-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .modal-meta {
+      font-size: 12.5px;
+      color: #64748b;
+      margin-top: 4px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .modal-close {
+      background: #f1f5f9;
+      border: none;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      font-size: 16px;
+      cursor: pointer;
+      color: #64748b;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.13s;
+    }
+
+    .modal-close:hover {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+
+    .modal-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 24px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* ── Recording player ── */
+    .recording-section {}
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
       color: #94a3b8;
-      max-width: 150px;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      margin-bottom: 10px;
+    }
+
+    .audio-player {
+      width: 100%;
+      height: 40px;
+      border-radius: 8px;
+      outline: none;
+    }
+
+    .no-recording {
+      font-size: 13px;
+      color: #94a3b8;
+      background: #f8fafc;
+      border: 1px dashed #e2e8f0;
+      border-radius: 8px;
+      padding: 12px 16px;
+      text-align: center;
+    }
+
+    /* ── Transcript ── */
+    .transcript-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .bubble-row {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .bubble-row.user {
+      align-items: flex-start;
+    }
+
+    .bubble-row.assistant {
+      align-items: flex-end;
+    }
+
+    .bubble-label {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+      padding: 0 4px;
+    }
+
+    .bubble {
+      max-width: 85%;
+      padding: 10px 14px;
+      border-radius: 14px;
+      font-size: 13.5px;
+      line-height: 1.55;
+    }
+
+    .bubble-row.user .bubble {
+      background: #f1f5f9;
+      color: #1e293b;
+      border-bottom-left-radius: 4px;
+    }
+
+    .bubble-row.assistant .bubble {
+      background: #2563eb;
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+
+    .no-transcript {
+      font-size: 13px;
+      color: #94a3b8;
+      background: #f8fafc;
+      border: 1px dashed #e2e8f0;
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .modal-loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 40px;
+      color: #64748b;
+      font-size: 13.5px;
+    }
+
+    /* ── Auth screen ── */
+    #authScreen {
+      position: fixed;
+      inset: 0;
+      background: #f1f5f9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    #authScreen.hidden {
+      display: none;
+    }
+
+    .auth-card {
+      background: white;
+      border-radius: 18px;
+      border: 1px solid #e2e8f0;
+      padding: 36px 40px 40px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+    }
+
+    .auth-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+
+    .auth-brand-badge {
+      width: 40px;
+      height: 40px;
+      background: #0d1f3c;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .auth-brand-text {
+      line-height: 1.3;
+    }
+
+    .auth-brand-name {
+      font-size: 16px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .auth-brand-sub {
+      font-size: 12px;
+      color: #94a3b8;
+    }
+
+    .auth-field {
+      margin-bottom: 14px;
+    }
+
+    .auth-field label {
+      display: block;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 6px;
+    }
+
+    .auth-field input {
+      width: 100%;
+      padding: 10px 13px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.13s;
+      color: #0f172a;
+    }
+
+    .auth-field input:focus {
+      border-color: #2563eb;
+    }
+
+    .auth-submit {
+      width: 100%;
+      padding: 11px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 9px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 6px;
+      transition: background 0.13s;
+    }
+
+    .auth-submit:hover {
+      background: #1d4ed8;
+    }
+
+    .auth-submit:disabled {
+      background: #93c5fd;
+      cursor: not-allowed;
+    }
+
+    .auth-error {
+      font-size: 13px;
+      color: #dc2626;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 7px;
+      padding: 9px 12px;
+      margin-top: 12px;
+      display: none;
+    }
+
+    .auth-error.show {
+      display: block;
+    }
+
+    /* ── Sidebar user footer ── */
+    .sidebar-user {
+      padding: 14px 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.07);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .sidebar-user-avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: #2563eb;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .sidebar-user-email {
+      flex: 1;
+      font-size: 11.5px;
+      color: rgba(255, 255, 255, 0.55);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+
+    .sidebar-logout {
+      background: none;
+      border: none;
+      color: rgba(255, 255, 255, 0.35);
+      font-size: 15px;
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 5px;
+      transition: color 0.13s;
+      flex-shrink: 0;
+    }
+
+    .sidebar-logout:hover {
+      color: rgba(255, 255, 255, 0.8);
+    }
   </style>
 </head>
+
 <body>
 
-<!-- ── Sidebar ── -->
-<div class="sidebar">
-  <div class="sidebar-brand">
-    <div class="brand-badge">OM</div>
-    <div class="brand-name">OptiMotion</div>
-    <div class="brand-sub">Renewal Bot</div>
+  <!-- ── Auth Screen ── -->
+  <div id="authScreen">
+    <div class="auth-card">
+      <div class="auth-brand">
+        <div class="auth-brand-badge">OM</div>
+        <div class="auth-brand-text">
+          <div class="auth-brand-name">OptiMotion</div>
+          <div class="auth-brand-sub">Renewal Bot</div>
+        </div>
+      </div>
+
+      <div id="authFields">
+        <div class="auth-field">
+          <label>Email</label>
+          <input type="email" id="authEmail" placeholder="you@example.com" onkeydown="authKeydown(event)" />
+        </div>
+        <div class="auth-field">
+          <label>Password</label>
+          <input type="password" id="authPassword" placeholder="••••••••" onkeydown="authKeydown(event)" />
+        </div>
+      </div>
+
+      <button class="auth-submit" id="authSubmitBtn" onclick="authSubmit()">Login</button>
+
+      <div class="auth-error" id="authError"></div>
+    </div>
   </div>
-  <nav class="nav">
-    <button class="nav-item active" id="nav-call" onclick="showPage('call', this)">
-      <span class="nav-icon">📞</span> Call
-    </button>
-    <button class="nav-item" id="nav-logs" onclick="showPage('logs', this)">
-      <span class="nav-icon">📋</span> Logs
-    </button>
-  </nav>
-</div>
 
-<!-- ── Main ── -->
-<div class="main">
-
-  <!-- Call Page -->
-  <div id="page-call" class="page active">
-    <div class="page-header">
-      <div class="page-title">Renewal Reminder</div>
-      <div class="page-sub">Initiate a renewal reminder call to a rider</div>
+  <!-- ── Sidebar ── -->
+  <div class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-badge">OM</div>
+      <div class="brand-name">OptiMotion</div>
+      <div class="brand-sub">Renewal Bot</div>
     </div>
-
-    <div class="tabs">
-      <button class="tab-btn active" onclick="showTab('excel', this)">Excel Upload</button>
-      <button class="tab-btn" onclick="showTab('manual', this)">Manual Entry</button>
+    <nav class="nav">
+      <button class="nav-item active" id="nav-call" onclick="showPage('call', this)">
+        <span class="nav-icon">📞</span> Call
+      </button>
+      <button class="nav-item" id="nav-logs" onclick="showPage('logs', this)">
+        <span class="nav-icon">📋</span> Logs
+      </button>
+    </nav>
+    <div class="sidebar-user">
+      <div class="sidebar-user-avatar" id="userAvatar">?</div>
+      <div class="sidebar-user-email" id="userEmail"></div>
+      <button class="sidebar-logout" onclick="logout()" title="Logout">⏻</button>
     </div>
+  </div>
 
-    <!-- Excel tab -->
-    <div id="tab-excel" class="tab-content active">
-      <div class="card">
-        <div class="section-label">Upload Rider Data</div>
+  <!-- ── Main ── -->
+  <div class="main">
 
-        <div class="upload-area" id="uploadArea">
-          <input type="file" id="excelFile" accept=".xlsx,.xls,.csv" onchange="handleFile(this)" />
-          <div class="upload-icon">📄</div>
-          <div class="upload-text" id="uploadText">Click to upload or drag &amp; drop</div>
-          <div class="upload-sub">.xlsx, .xls or .csv — first row will be used</div>
+    <!-- Call Page -->
+    <div id="page-call" class="page active">
+      <div class="page-header">
+        <div class="page-title">Collection Call</div>
+        <div class="page-sub">Initiate a collection call to a rider</div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab-btn active" onclick="showTab('excel', this)">Excel Upload</button>
+        <button class="tab-btn" onclick="showTab('manual', this)">Manual Entry</button>
+      </div>
+
+      <!-- Excel tab -->
+      <div id="tab-excel" class="tab-content active">
+        <div class="card">
+          <div class="section-label">Upload Rider Data</div>
+
+          <div class="upload-area" id="uploadArea">
+            <input type="file" id="excelFile" accept=".xlsx,.xls,.csv" onchange="handleFile(this)" />
+            <div class="upload-icon">📄</div>
+            <div class="upload-text" id="uploadText">Click to upload or drag &amp; drop</div>
+            <div class="upload-sub">.xlsx, .xls or .csv — first row will be used</div>
+          </div>
+
+          <button class="template-link" onclick="downloadTemplate()">↓ Download sample template</button>
+
+          <div class="preview-card" id="previewCard">
+            <div class="preview-title">Preview — First Row</div>
+            <div class="preview-grid" id="previewGrid"></div>
+          </div>
+
+          <hr class="divider" />
+
+          <button class="btn-primary" id="excelCallBtn" disabled onclick="startCall('excel')">
+            📞 &nbsp;Start Call
+          </button>
+
+          <div class="call-status" id="excelStatus"></div>
         </div>
+      </div>
 
-        <button class="template-link" onclick="downloadTemplate()">↓ Download sample template</button>
+      <!-- Manual tab -->
+      <div id="tab-manual" class="tab-content">
+        <div class="card">
+          <div class="section-label">Rider Details</div>
 
-        <div class="preview-card" id="previewCard">
-          <div class="preview-title">Preview — First Row</div>
-          <div class="preview-grid" id="previewGrid"></div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Phone Number</label>
+              <input type="text" id="m_phone" placeholder="+91 98765 43210" />
+            </div>
+            <div class="form-group">
+              <label>Rider Name</label>
+              <input type="text" id="m_name" placeholder="Santhosh" />
+            </div>
+            <div class="form-group">
+              <label>Vehicle Model</label>
+              <input type="text" id="m_vehicle" placeholder="EV 3" />
+            </div>
+            <div class="form-group">
+              <label>End Date</label>
+              <input type="date" id="m_date" />
+            </div>
+            <div class="form-group">
+              <label>Amount Due (₹)</label>
+              <input type="number" id="m_amount" placeholder="2000" />
+            </div>
+            <div class="form-group">
+              <label>Language</label>
+              <select id="m_language"
+                style="padding:8px 11px;border:1px solid #d1d5db;border-radius:7px;font-size:13.5px;color:#0f172a;outline:none;background:white;">
+                <option value="English">English</option>
+                <option value="Hindi">Hindi</option>
+                <option value="Telugu">Telugu</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="day-selector-label">Call Day</div>
+          <div class="day-selector">
+            <div class="day-card" id="day-t0" onclick="selectDay('T0', this)">
+              <div class="day-tag c-t0">T0</div>
+              <div class="day-desc">Due today</div>
+            </div>
+            <div class="day-card" id="day-t1" onclick="selectDay('T-1', this)">
+              <div class="day-tag c-t1">T-1</div>
+              <div class="day-desc">1 day overdue</div>
+            </div>
+            <div class="day-card" id="day-t2" onclick="selectDay('T-2', this)">
+              <div class="day-tag c-t2">T-2</div>
+              <div class="day-desc">2 days overdue</div>
+            </div>
+          </div>
+
+          <button class="btn-primary" onclick="startCall('manual')">
+            📞 &nbsp;Start Call
+          </button>
+
+          <div class="call-status" id="manualStatus"></div>
         </div>
-
-        <hr class="divider" />
-
-        <button class="btn-primary" id="excelCallBtn" disabled onclick="startCall('excel')">
-          📞 &nbsp;Start Call
-        </button>
-
-        <div class="call-status" id="excelStatus"></div>
       </div>
     </div>
 
-    <!-- Manual tab -->
-    <div id="tab-manual" class="tab-content">
-      <div class="card">
-        <div class="section-label">Rider Details</div>
+    <!-- Logs Page -->
+    <div id="page-logs" class="page">
+      <div class="logs-toolbar">
+        <div class="page-header" style="margin-bottom:0">
+          <div class="page-title">Call Logs</div>
+          <div class="page-sub">History of all initiated calls</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-secondary" onclick="exportLogs()">↓ &nbsp;Export Excel</button>
+          <button class="btn-secondary" id="filterToggleBtn" onclick="toggleFilter()">⚙ &nbsp;Filter</button>
+          <button class="btn-secondary" onclick="loadLogs()">↺ &nbsp;Refresh</button>
+        </div>
+      </div>
 
-        <div class="form-grid">
-          <div class="form-group">
-            <label>Phone Number</label>
-            <input type="text" id="m_phone" placeholder="+91 98765 43210" />
+      <!-- Filter Panel -->
+      <div id="filterPanel"
+        style="display:none; background:white; border:1px solid #e2e8f0; border-radius:12px; padding:18px 20px; margin-bottom:16px;">
+        <div
+          style="display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:12px; align-items:end;">
+          <div>
+            <div
+              style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">
+              Date From</div>
+            <input type="date" id="f_date_from" oninput="applyFilters()"
+              style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;outline:none;" />
           </div>
-          <div class="form-group">
-            <label>Rider Name</label>
-            <input type="text" id="m_name" placeholder="Santhosh" />
+          <div>
+            <div
+              style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">
+              Date To</div>
+            <input type="date" id="f_date_to" oninput="applyFilters()"
+              style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;outline:none;" />
           </div>
-          <div class="form-group">
-            <label>Vehicle Model</label>
-            <input type="text" id="m_vehicle" placeholder="EV 3" />
+          <div>
+            <div
+              style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">
+              Rider Name</div>
+            <input type="text" id="f_rider" placeholder="Search name…" oninput="applyFilters()"
+              style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;outline:none;" />
           </div>
-          <div class="form-group">
-            <label>End Date</label>
-            <input type="date" id="m_date" />
+          <div>
+            <div
+              style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">
+              Vehicle</div>
+            <input type="text" id="f_vehicle" placeholder="Search vehicle…" oninput="applyFilters()"
+              style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;outline:none;" />
           </div>
-          <div class="form-group">
-            <label>Amount Due (₹)</label>
-            <input type="number" id="m_amount" placeholder="2000" />
+          <div>
+            <div
+              style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">
+              Call Day</div>
+            <select id="f_call_day" onchange="applyFilters()"
+              style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;outline:none;background:white;">
+              <option value="">All</option>
+              <option value="T-2">T-2</option>
+              <option value="T-1">T-1</option>
+              <option value="T0">T0</option>
+            </select>
           </div>
-          <div class="form-group">
-            <label>Language</label>
-            <select id="m_language" style="padding:8px 11px;border:1px solid #d1d5db;border-radius:7px;font-size:13.5px;color:#0f172a;outline:none;background:white;">
+          <div>
+            <div
+              style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">
+              Sentiment</div>
+            <select id="f_sentiment" onchange="applyFilters()"
+              style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;outline:none;background:white;">
+              <option value="">All</option>
+              <option value="positive">Positive</option>
+              <option value="negative">Negative</option>
+              <option value="neutral">Neutral</option>
+            </select>
+          </div>
+          <div>
+            <div
+              style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">
+              Language</div>
+            <select id="f_language" onchange="applyFilters()"
+              style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;outline:none;background:white;">
+              <option value="">All</option>
               <option value="English">English</option>
               <option value="Hindi">Hindi</option>
               <option value="Telugu">Telugu</option>
             </select>
           </div>
-        </div>
-
-        <div class="day-selector-label">Call Day</div>
-        <div class="day-selector">
-          <div class="day-card" id="day-t2" onclick="selectDay('T-2', this)">
-            <div class="day-tag c-t2">T-2</div>
-            <div class="day-desc">2 days left</div>
-          </div>
-          <div class="day-card" id="day-t1" onclick="selectDay('T-1', this)">
-            <div class="day-tag c-t1">T-1</div>
-            <div class="day-desc">1 day left</div>
-          </div>
-          <div class="day-card" id="day-t0" onclick="selectDay('T0', this)">
-            <div class="day-tag c-t0">T0</div>
-            <div class="day-desc">Ends today</div>
+          <div style="display:flex;align-items:flex-end;">
+            <button class="btn-secondary" onclick="clearFilters()" style="width:100%;justify-content:center;">✕
+              &nbsp;Clear</button>
           </div>
         </div>
+      </div>
 
-        <button class="btn-primary" onclick="startCall('manual')">
-          📞 &nbsp;Start Call
-        </button>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Time</th>
+              <th>Rider</th>
+              <th>Phone</th>
+              <th>Vehicle</th>
+              <th>Call Day</th>
+              <th>Status</th>
+              <th>Sentiment</th>
+              <th>Takeaway</th>
+              <th>Callback</th>
+            </tr>
+          </thead>
+          <tbody id="logsBody">
+            <tr>
+              <td colspan="9" class="empty-state">No calls yet</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
 
-        <div class="call-status" id="manualStatus"></div>
+  </div><!-- /main -->
+
+  <!-- ── Call Detail Modal ── -->
+  <div class="modal-backdrop" id="modalBackdrop" onclick="handleBackdropClick(event)">
+    <div class="modal-card" id="modalCard">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title" id="modalTitle">Call Detail</div>
+          <div class="modal-meta" id="modalMeta"></div>
+        </div>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body" id="modalBody">
+        <div class="modal-loading">
+          <div class="spinner"></div> Loading...
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- Logs Page -->
-  <div id="page-logs" class="page">
-    <div class="logs-toolbar">
-      <div class="page-header" style="margin-bottom:0">
-        <div class="page-title">Call Logs</div>
-        <div class="page-sub">History of all initiated calls</div>
-      </div>
-      <button class="btn-secondary" onclick="loadLogs()">↺ &nbsp;Refresh</button>
-    </div>
+  <script>
+    // ── Auth ───────────────────────────────────────────────────────────────────────
+    let _token = localStorage.getItem('auth_token') || null;
+    let _userEmail = localStorage.getItem('auth_email') || null;
 
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Time</th>
-            <th>Rider</th>
-            <th>Phone</th>
-            <th>Vehicle</th>
-            <th>Call Day</th>
-            <th>Status</th>
-            <th>UUID</th>
-          </tr>
-        </thead>
-        <tbody id="logsBody">
-          <tr><td colspan="7" class="empty-state">No calls yet</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
+    function initAuth() {
+      if (_token) {
+        showApp();
+      }
+      // else: auth screen is already visible by default
+    }
 
-</div><!-- /main -->
+    function showApp() {
+      document.getElementById('authScreen').classList.add('hidden');
+      document.getElementById('userEmail').textContent = _userEmail || '';
+      document.getElementById('userAvatar').textContent = (_userEmail || '?')[0].toUpperCase();
+    }
 
-<script>
-// ── State ──────────────────────────────────────────────────────────────────────
-let parsedRow  = null;
-let selectedDay = null;
+    function authKeydown(e) {
+      if (e.key === 'Enter') authSubmit();
+    }
 
-// ── Navigation ─────────────────────────────────────────────────────────────────
-function showPage(page, btn) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('page-' + page).classList.add('active');
-  btn.classList.add('active');
-  if (page === 'logs') loadLogs();
-}
+    async function authSubmit() {
+      const email = document.getElementById('authEmail').value.trim();
+      const password = document.getElementById('authPassword').value;
+      const errorEl = document.getElementById('authError');
+      const btn = document.getElementById('authSubmitBtn');
 
-// ── Tabs ───────────────────────────────────────────────────────────────────────
-function showTab(tab, btn) {
-  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('tab-' + tab).classList.add('active');
-  btn.classList.add('active');
-}
+      if (!email || !password) {
+        showAuthError('Please enter your email and password.');
+        return;
+      }
 
-// ── Excel ──────────────────────────────────────────────────────────────────────
-function handleFile(input) {
-  const file = input.files[0];
-  if (!file) return;
+      btn.disabled = true;
+      btn.textContent = 'Logging in…';
+      errorEl.classList.remove('show');
 
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const wb   = XLSX.read(e.target.result, { type: 'array', cellDates: true });
-    const ws   = wb.Sheets[wb.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      try {
+        const res = await fetch('/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Something went wrong');
 
-    if (!rows.length) { alert('No data found in the file.'); return; }
+        _token = data.token;
+        _userEmail = data.email;
+        localStorage.setItem('auth_token', _token);
+        localStorage.setItem('auth_email', _userEmail);
+        showApp();
+      } catch (err) {
+        showAuthError(err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Login';
+      }
+    }
 
-    parsedRow = normalizeRow(rows[0]);
-    showPreview(parsedRow);
-    document.getElementById('excelCallBtn').disabled = false;
+    function showAuthError(msg) {
+      const el = document.getElementById('authError');
+      el.textContent = msg;
+      el.classList.add('show');
+    }
 
-    const area = document.getElementById('uploadArea');
-    document.getElementById('uploadText').textContent = '✓  ' + file.name;
-    area.classList.add('file-loaded');
-  };
-  reader.readAsArrayBuffer(file);
-}
+    function logout() {
+      _token = null;
+      _userEmail = null;
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('auth_email');
+      document.getElementById('authScreen').classList.remove('hidden');
+      document.getElementById('authEmail').value = '';
+      document.getElementById('authPassword').value = '';
+      document.getElementById('authError').classList.remove('show');
+    }
 
-function normalizeRow(row) {
-  const n = {};
-  for (const k of Object.keys(row)) n[k.trim().toLowerCase().replace(/\s+/g, '_')] = row[k];
-  return {
-    phone    : String(n['phone_number'] || n['phone'] || ''),
-    name     : String(n['rider_name']   || n['name']  || ''),
-    vehicle  : String(n['vehicle_model']|| n['vehicle']|| ''),
-    end_date : formatExcelDate(n['end_date'] || n['date'] || ''),
-    amount   : String(n['amount_due']   || n['amount']|| ''),
-    call_day : String(n['call_day']     || n['day']   || 'T-2'),
-    language : String(n['language']     || 'English'),
-  };
-}
+    async function authFetch(url, opts = {}) {
+      const res = await fetch(url, {
+        ...opts,
+        headers: { ...(opts.headers || {}), 'Authorization': `Bearer ${_token}` },
+      });
+      if (res.status === 401) {
+        logout();
+        throw new Error('Session expired. Please log in again.');
+      }
+      return res;
+    }
 
-function formatExcelDate(val) {
-  if (!val) return '';
-  if (val instanceof Date) return val.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
-  return String(val);
-}
+    // ── State ──────────────────────────────────────────────────────────────────────
+    let parsedRow = null;
+    let selectedDay = null;
+    let _allLogs = [];   // full unfiltered cache
+    let _filteredLogs = [];   // current filtered set (empty = no active filter)
 
-function showPreview(row) {
-  const dayClass = row.call_day === 'T-2' ? 'badge-t2' : row.call_day === 'T-1' ? 'badge-t1' : 'badge-t0';
-  document.getElementById('previewGrid').innerHTML = `
+    // ── Navigation ─────────────────────────────────────────────────────────────────
+    function showPage(page, btn) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      document.getElementById('page-' + page).classList.add('active');
+      btn.classList.add('active');
+      if (page === 'logs') loadLogs();
+    }
+
+    // ── Tabs ───────────────────────────────────────────────────────────────────────
+    function showTab(tab, btn) {
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('tab-' + tab).classList.add('active');
+      btn.classList.add('active');
+    }
+
+    // ── Excel ──────────────────────────────────────────────────────────────────────
+    function handleFile(input) {
+      const file = input.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+        if (!rows.length) { alert('No data found in the file.'); return; }
+
+        parsedRow = normalizeRow(rows[0]);
+        showPreview(parsedRow);
+        document.getElementById('excelCallBtn').disabled = false;
+
+        const area = document.getElementById('uploadArea');
+        document.getElementById('uploadText').textContent = '✓  ' + file.name;
+        area.classList.add('file-loaded');
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function normalizeRow(row) {
+      const n = {};
+      for (const k of Object.keys(row)) n[k.trim().toLowerCase().replace(/\s+/g, '_')] = row[k];
+      return {
+        phone: String(n['phone_number'] || n['phone'] || ''),
+        name: String(n['rider_name'] || n['name'] || ''),
+        vehicle: String(n['vehicle_model'] || n['vehicle'] || ''),
+        end_date: formatExcelDate(n['end_date'] || n['date'] || ''),
+        amount: String(n['amount_due'] || n['amount'] || ''),
+        call_day: String(n['call_day'] || n['day'] || 'T-2'),
+        language: String(n['language'] || 'English'),
+      };
+    }
+
+    function formatExcelDate(val) {
+      if (!val) return '';
+      if (val instanceof Date) return val.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+      return String(val);
+    }
+
+    function showPreview(row) {
+      const dayClass = row.call_day === 'T-2' ? 'badge-t2' : row.call_day === 'T-1' ? 'badge-t1' : 'badge-t0';
+      document.getElementById('previewGrid').innerHTML = `
     <div class="preview-item"><label>Phone</label><span>${row.phone}</span></div>
     <div class="preview-item"><label>Rider Name</label><span>${row.name}</span></div>
     <div class="preview-item"><label>Vehicle Model</label><span>${row.vehicle}</span></div>
@@ -711,144 +1449,335 @@ function showPreview(row) {
     <div class="preview-item"><label>Amount Due</label><span>₹ ${row.amount}</span></div>
     <div class="preview-item"><label>Call Day</label><span class="badge ${dayClass}">${row.call_day}</span></div>
   `;
-  document.getElementById('previewCard').classList.add('show');
-}
-
-function downloadTemplate() {
-  const ws = XLSX.utils.aoa_to_sheet([
-    ['Phone Number', 'Rider Name', 'Vehicle Model', 'End Date', 'Amount Due', 'Call Day', 'Language'],
-    ['+919866517854', 'Santhosh', 'EV 3', '20 March 2026', '2000', 'T-2', 'English'],
-  ]);
-  ws['!cols'] = [18,15,15,18,12,8].map(w => ({ wch: w }));
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Riders');
-  XLSX.writeFile(wb, 'optimotion_template.xlsx');
-}
-
-// ── Call Day selector ──────────────────────────────────────────────────────────
-function selectDay(day, el) {
-  document.querySelectorAll('.day-card').forEach(c => c.classList.remove('sel-t2','sel-t1','sel-t0'));
-  selectedDay = day;
-  const cls = day === 'T-2' ? 'sel-t2' : day === 'T-1' ? 'sel-t1' : 'sel-t0';
-  el.classList.add(cls);
-}
-
-// ── Start Call ─────────────────────────────────────────────────────────────────
-async function startCall(source) {
-  let data;
-
-  if (source === 'excel') {
-    if (!parsedRow) return;
-    data = parsedRow;
-  } else {
-    const phone   = document.getElementById('m_phone').value.trim();
-    const name    = document.getElementById('m_name').value.trim();
-    const vehicle = document.getElementById('m_vehicle').value.trim();
-    const dateRaw = document.getElementById('m_date').value;
-    const amount  = document.getElementById('m_amount').value.trim();
-
-    if (!phone || !name || !vehicle || !amount || !selectedDay) {
-      alert('Please fill in all fields and select a call day.');
-      return;
+      document.getElementById('previewCard').classList.add('show');
     }
 
-    const dateObj  = dateRaw ? new Date(dateRaw) : null;
-    const end_date = dateObj
-      ? dateObj.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
-      : '';
+    function downloadTemplate() {
+      const ws = XLSX.utils.aoa_to_sheet([
+        ['Phone Number', 'Rider Name', 'Vehicle Model', 'End Date', 'Amount Due', 'Call Day', 'Language'],
+        ['+919866517854', 'Santhosh', 'EV 3', '20 March 2026', '2000', 'T-2', 'English'],
+      ]);
+      ws['!cols'] = [18, 15, 15, 18, 12, 8].map(w => ({ wch: w }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Riders');
+      XLSX.writeFile(wb, 'optimotion_template.xlsx');
+    }
 
-    const language = document.getElementById('m_language').value;
-    data = { phone, name, vehicle, end_date, amount, call_day: selectedDay, language };
-  }
+    // ── Call Day selector ──────────────────────────────────────────────────────────
+    function selectDay(day, el) {
+      document.querySelectorAll('.day-card').forEach(c => c.classList.remove('sel-t2', 'sel-t1', 'sel-t0'));
+      selectedDay = day;
+      const cls = day === 'T-2' ? 'sel-t2' : day === 'T-1' ? 'sel-t1' : 'sel-t0';
+      el.classList.add(cls);
+    }
 
-  const statusEl = document.getElementById(source + 'Status');
-  setStatus(statusEl, 'loading', 'Initiating call...');
+    // ── Start Call ─────────────────────────────────────────────────────────────────
+    async function startCall(source) {
+      let data;
 
-  try {
-    const res = await fetch('/start', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        phone_number: data.phone,
-        body: {
-          rider_name    : data.name,
-          vehicle_model : data.vehicle,
-          end_date      : data.end_date,
-          amount        : data.amount,
-          call_day      : data.call_day,
-          language      : data.language,
+      if (source === 'excel') {
+        if (!parsedRow) return;
+        data = parsedRow;
+      } else {
+        const phone = document.getElementById('m_phone').value.trim();
+        const name = document.getElementById('m_name').value.trim();
+        const vehicle = document.getElementById('m_vehicle').value.trim();
+        const dateRaw = document.getElementById('m_date').value;
+        const amount = document.getElementById('m_amount').value.trim();
+
+        if (!phone || !name || !vehicle || !amount || !selectedDay) {
+          alert('Please fill in all fields and select a call day.');
+          return;
         }
-      })
-    });
 
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.detail || 'Call failed');
+        const dateObj = dateRaw ? new Date(dateRaw) : null;
+        const end_date = dateObj
+          ? dateObj.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
+          : '';
 
-    setStatus(statusEl, 'success', `Call initiated — ${data.name} (${data.phone})`, result.call_uuid);
+        const language = document.getElementById('m_language').value;
+        data = { phone, name, vehicle, end_date, amount, call_day: selectedDay, language };
+      }
 
-  } catch (err) {
-    setStatus(statusEl, 'error', err.message);
-  }
-}
+      const statusEl = document.getElementById(source + 'Status');
+      setStatus(statusEl, 'loading', 'Initiating call...');
 
-function setStatus(el, type, message, uuid) {
-  el.className = 'call-status show ' + type;
-  const icon    = type === 'loading' ? '<div class="spinner"></div>' : type === 'success' ? '✅' : '❌';
-  const uuidHtml = uuid ? `<div class="status-uuid">UUID: ${uuid}</div>` : '';
-  el.innerHTML  = `${icon}<div><div>${message}</div>${uuidHtml}</div>`;
-}
+      try {
+        const res = await authFetch('/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phone_number: data.phone,
+            body: {
+              rider_name: data.name,
+              vehicle_model: data.vehicle,
+              end_date: data.end_date,
+              amount: data.amount,
+              call_day: data.call_day,
+              language: data.language,
+            }
+          })
+        });
 
-// ── Logs ───────────────────────────────────────────────────────────────────────
-async function loadLogs() {
-  try {
-    const res  = await fetch('/logs');
-    const logs = await res.json();
-    renderLogs(logs);
-  } catch (e) {
-    console.error('Failed to load logs:', e);
-  }
-}
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.detail || 'Call failed');
 
-function renderLogs(logs) {
-  const tbody = document.getElementById('logsBody');
-  if (!logs.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No calls yet</td></tr>';
-    return;
-  }
+        setStatus(statusEl, 'success', `Call initiated — ${data.name} (${data.phone})`, result.call_uuid);
 
-  tbody.innerHTML = [...logs].reverse().map(log => {
-    const dayClass    = log.call_day === 'T-2' ? 'badge-t2' : log.call_day === 'T-1' ? 'badge-t1' : 'badge-t0';
-    const statusClass = log.status === 'initiated' ? 'badge-ok' : 'badge-fail';
-    const time        = new Date(log.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-    return `
-      <tr>
+      } catch (err) {
+        setStatus(statusEl, 'error', err.message);
+      }
+    }
+
+    function setStatus(el, type, message, uuid) {
+      el.className = 'call-status show ' + type;
+      const icon = type === 'loading' ? '<div class="spinner"></div>' : type === 'success' ? '✅' : '❌';
+      const uuidHtml = uuid ? `<div class="status-uuid">UUID: ${uuid}</div>` : '';
+      el.innerHTML = `${icon}<div><div>${message}</div>${uuidHtml}</div>`;
+    }
+
+    // ── Logs ───────────────────────────────────────────────────────────────────────
+    async function loadLogs() {
+      try {
+        const res = await authFetch('/logs');
+        const logs = await res.json();
+        _allLogs = logs;
+        renderLogs(logs);
+      } catch (e) {
+        console.error('Failed to load logs:', e);
+      }
+    }
+
+    function renderLogs(logs) {
+      const tbody = document.getElementById('logsBody');
+      if (!logs.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No calls yet</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = logs.map(log => {
+        const dayClass = log.call_day === 'T-2' ? 'badge-t2' : log.call_day === 'T-1' ? 'badge-t1' : 'badge-t0';
+        const statusClass = log.status === 'initiated' ? 'badge-ok' : 'badge-fail';
+        const dt = new Date(log.timestamp);
+        const date = dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+        const time = dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+        const uuid = log.call_uuid || '';
+        const sentiment = log.sentiment || '—';
+        const sentClass = sentiment === 'positive' ? 'badge-positive' : sentiment === 'negative' ? 'badge-negative' : 'badge-neutral';
+        const takeaway = log.takeaway || '—';
+        const callback = log.callback || '—';
+        const cbClass = callback === 'yes' ? 'badge-negative' : callback === 'no' ? 'badge-positive' : 'badge-neutral';
+        return `
+      <tr onclick="openCallDetail('${uuid}', ${JSON.stringify(log).replace(/"/g, '&quot;')})">
+        <td>${date}</td>
         <td>${time}</td>
         <td>${log.rider_name || '—'}</td>
         <td>${log.phone_number}</td>
         <td>${log.vehicle_model || '—'}</td>
         <td><span class="badge ${dayClass}">${log.call_day || '—'}</span></td>
         <td><span class="badge ${statusClass}">${log.status}</span></td>
-        <td class="uuid-cell" title="${log.call_uuid}">${log.call_uuid}</td>
+        <td><span class="badge ${sentClass}">${sentiment}</span></td>
+        <td class="takeaway-cell">${takeaway}</td>
+        <td><span class="badge ${cbClass}">${callback}</span></td>
       </tr>`;
-  }).join('');
-}
+      }).join('');
+    }
 
-// ── Drag & drop ────────────────────────────────────────────────────────────────
-const uploadArea = document.getElementById('uploadArea');
-uploadArea.addEventListener('dragover',  e => { e.preventDefault(); uploadArea.classList.add('drag-over'); });
-uploadArea.addEventListener('dragleave', ()  => uploadArea.classList.remove('drag-over'));
-uploadArea.addEventListener('drop', e => {
-  e.preventDefault();
-  uploadArea.classList.remove('drag-over');
-  const file = e.dataTransfer.files[0];
-  if (file) {
-    const input = document.getElementById('excelFile');
-    const dt    = new DataTransfer();
-    dt.items.add(file);
-    input.files = dt.files;
-    handleFile(input);
-  }
-});
-</script>
+    // ── Filter ─────────────────────────────────────────────────────────────────────
+    function toggleFilter() {
+      const panel = document.getElementById('filterPanel');
+      const btn = document.getElementById('filterToggleBtn');
+      const open = panel.style.display === 'none';
+      panel.style.display = open ? 'block' : 'none';
+      btn.style.background = open ? '#eff6ff' : '';
+      btn.style.borderColor = open ? '#2563eb' : '';
+      btn.style.color = open ? '#2563eb' : '';
+    }
+
+    function applyFilters() {
+      const dateFrom = document.getElementById('f_date_from').value;
+      const dateTo = document.getElementById('f_date_to').value;
+      const rider = document.getElementById('f_rider').value.trim().toLowerCase();
+      const vehicle = document.getElementById('f_vehicle').value.trim().toLowerCase();
+      const callDay = document.getElementById('f_call_day').value;
+      const sentiment = document.getElementById('f_sentiment').value;
+      const language = document.getElementById('f_language').value;
+
+      _filteredLogs = _allLogs.filter(log => {
+        const dt = new Date(log.timestamp);
+        if (dateFrom && dt < new Date(dateFrom)) return false;
+        if (dateTo && dt > new Date(dateTo + 'T23:59:59')) return false;
+        if (rider && !(log.rider_name || '').toLowerCase().includes(rider)) return false;
+        if (vehicle && !(log.vehicle_model || '').toLowerCase().includes(vehicle)) return false;
+        if (callDay && log.call_day !== callDay) return false;
+        if (sentiment && log.sentiment !== sentiment) return false;
+        if (language && log.language !== language) return false;
+        return true;
+      });
+
+      renderLogs(_filteredLogs);
+    }
+
+    function clearFilters() {
+      ['f_date_from', 'f_date_to', 'f_rider', 'f_vehicle'].forEach(id => document.getElementById(id).value = '');
+      ['f_call_day', 'f_sentiment', 'f_language'].forEach(id => document.getElementById(id).value = '');
+      _filteredLogs = [];
+      renderLogs(_allLogs);
+    }
+
+    // ── Export Excel ───────────────────────────────────────────────────────────────
+    function exportLogs() {
+      const source = _filteredLogs.length ? _filteredLogs : _allLogs;
+      if (!source.length) { alert('No logs to export.'); return; }
+
+      const rows = source.map(l => {
+        const dt = new Date(l.timestamp);
+        return {
+          'Date': dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+          'Time': dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+          'Rider Name': l.rider_name || '',
+          'Phone': l.phone_number || '',
+          'Vehicle': l.vehicle_model || '',
+          'End Date': l.end_date || '',
+          'Amount': l.amount || '',
+          'Call Day': l.call_day || '',
+          'Language': l.language || '',
+          'Status': l.status || '',
+          'Sentiment': l.sentiment || '',
+          'Takeaway': l.takeaway || '',
+          'Callback': l.callback || '',
+        };
+      });
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws['!cols'] = [14, 10, 16, 16, 14, 14, 10, 10, 10, 12, 12, 30].map(w => ({ wch: w }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Call Logs');
+      const date = new Date().toLocaleDateString('en-IN').replace(/\//g, '-');
+      XLSX.writeFile(wb, `optimotion_call_logs_${date}.xlsx`);
+    }
+
+    // ── Call Detail Modal ──────────────────────────────────────────────────────────
+    async function openCallDetail(callUuid, log) {
+      if (!callUuid) return;
+
+      // Populate header immediately with data we already have
+      const dayClass = log.call_day === 'T-2' ? 'badge-t2' : log.call_day === 'T-1' ? 'badge-t1' : 'badge-t0';
+      const time = new Date(log.timestamp).toLocaleString('en-IN');
+      document.getElementById('modalTitle').textContent = log.rider_name || 'Call Detail';
+      document.getElementById('modalMeta').innerHTML = `
+    <span>${log.phone_number}</span>
+    <span>${log.vehicle_model || ''}</span>
+    <span><span class="badge ${dayClass}">${log.call_day}</span></span>
+    <span style="color:#94a3b8">${time}</span>`;
+      document.getElementById('modalBody').innerHTML =
+        '<div class="modal-loading"><div class="spinner"></div> Loading transcript &amp; recording…</div>';
+      document.getElementById('modalBackdrop').classList.add('open');
+
+      // Fetch full detail
+      try {
+        const res = await authFetch(`/logs/${callUuid}`);
+        const detail = await res.json();
+        renderModalBody(callUuid, detail);
+      } catch (e) {
+        document.getElementById('modalBody').innerHTML =
+          `<div class="no-transcript">Failed to load details: ${e.message}</div>`;
+      }
+    }
+
+    function renderModalBody(callUuid, detail) {
+      const { transcript = [], recording } = detail;
+
+      // ── Recording section ──
+      let recordingHtml;
+      if (recording) {
+        recordingHtml = `
+      <div class="recording-section">
+        <div class="section-title">Recording</div>
+        <audio class="audio-player" controls id="recordingPlayer-${callUuid}"></audio>
+      </div>`;
+      } else {
+        recordingHtml = `
+      <div class="recording-section">
+        <div class="section-title">Recording</div>
+        <div class="no-recording">Recording not available yet</div>
+      </div>`;
+      }
+
+      // ── Transcript section ──
+      let transcriptHtml;
+      if (transcript.length) {
+        const bubbles = transcript.map(t => {
+          const cls = t.role === 'user' ? 'user' : 'assistant';
+          const label = t.role === 'user' ? 'Rider' : 'Bot';
+          const text = t.text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          return `
+        <div class="bubble-row ${cls}">
+          <div class="bubble-label">${label}</div>
+          <div class="bubble">${text}</div>
+        </div>`;
+        }).join('');
+        transcriptHtml = `
+      <div>
+        <div class="section-title">Transcript</div>
+        <div class="transcript-list">${bubbles}</div>
+      </div>`;
+      } else {
+        transcriptHtml = `
+      <div>
+        <div class="section-title">Transcript</div>
+        <div class="no-transcript">Transcript not available yet</div>
+      </div>`;
+      }
+
+      document.getElementById('modalBody').innerHTML = recordingHtml + transcriptHtml;
+
+      // Load recording with auth header (browser <audio src> can't send auth headers)
+      if (recording) {
+        authFetch(`/recording/${callUuid}`)
+          .then(res => res.blob())
+          .then(blob => {
+            const player = document.getElementById(`recordingPlayer-${callUuid}`);
+            if (player) player.src = URL.createObjectURL(blob);
+          })
+          .catch(() => { });
+      }
+    }
+
+    function closeModal() {
+      document.getElementById('modalBackdrop').classList.remove('open');
+      // Pause audio if playing
+      const audio = document.querySelector('.audio-player');
+      if (audio) audio.pause();
+    }
+
+    function handleBackdropClick(e) {
+      if (e.target === document.getElementById('modalBackdrop')) closeModal();
+    }
+
+    // Close on Escape key
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+    // ── Init ───────────────────────────────────────────────────────────────────────
+    initAuth();
+
+    // ── Drag & drop ────────────────────────────────────────────────────────────────
+    const uploadArea = document.getElementById('uploadArea');
+    uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('drag-over'); });
+    uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('drag-over'));
+    uploadArea.addEventListener('drop', e => {
+      e.preventDefault();
+      uploadArea.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file) {
+        const input = document.getElementById('excelFile');
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        input.files = dt.files;
+        handleFile(input);
+      }
+    });
+  </script>
 </body>
+
 </html>

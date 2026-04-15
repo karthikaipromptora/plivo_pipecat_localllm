@@ -1,30 +1,23 @@
 #!/usr/bin/env bash
-# Start vLLM with Qwen3-30B-A3B on NVIDIA L40S (44GB VRAM)
-#
-# Key flags:
-#   --quantization fp8            — fits comfortably in ~16GB, preserves accuracy
-#   --max-model-len 8192          — telephony context is short; reduces KV-cache memory
-#   --gpu-memory-utilization 0.80 — leave headroom for Sarvam STT/TTS HTTP overhead
-#   --default-chat-template-kwargs — disables chain-of-thought (thinking mode) so the
-#                                   model answers immediately without <think>…</think>
-#   --enable-prefix-caching       — caches the system prompt KV across turns (~30ms saved)
-#   --disable-log-requests        — cleaner logs in production
-#
-# Fallback: replace model with Qwen/Qwen3-8B for lower VRAM usage / faster TTFT.
-
 set -euo pipefail
 
-MODEL="${LOCAL_LLM_MODEL:-Qwen/Qwen3-30B-A3B}"
-PORT="${LOCAL_LLM_PORT:-8000}"
+MODEL="${LOCAL_LLM_MODEL:-Qwen/Qwen3-14B}"
+PORT="${LOCAL_LLM_PORT:-8049}"
+
+# Force V0 engine — V1 engine in 0.19.x has a scheduler bug causing requests to hang
+export VLLM_USE_V1=0
 
 echo "Starting vLLM: model=$MODEL  port=$PORT"
 
-exec uv run python -m vllm.entrypoints.openai.api_server \
-    --model "$MODEL" \
+exec vllm serve "$MODEL" \
     --port "$PORT" \
     --quantization fp8 \
-    --max-model-len 8192 \
-    --gpu-memory-utilization 0.80 \
+    --max-model-len 4096 \
+    --gpu-memory-utilization 0.85 \
+    --generation-config vllm \
     --default-chat-template-kwargs '{"enable_thinking": false}' \
     --enable-prefix-caching \
-    --trust-remote-code
+    --trust-remote-code \
+    --enable-auto-tool-choice \
+    --tool-call-parser hermes \
+    --no-enable-log-requests
