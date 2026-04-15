@@ -17,7 +17,6 @@ from pipecat.frames.frames import (
     TranscriptionFrame,
 )
 from pipecat.pipeline.pipeline import Pipeline
-from pipecat.services.cartesia.tts import CartesiaTTSService
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
 from pipecat.processors.aggregators.llm_context import LLMContext
@@ -25,12 +24,11 @@ from pipecat.processors.aggregators.llm_response_universal import (
     LLMContextAggregatorPair,
     LLMUserAggregatorParams,
 )
-from pipecat.services.elevenlabs.tts import ElevenLabsTTSService
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.runner.types import RunnerArguments
 from pipecat.runner.utils import parse_telephony_websocket
-# from pipecat.serializers.plivo import PlivoFrameSerializer
-from pipecat.serializers.vobiz import VobizFrameSerializer
+from pipecat.serializers.plivo import PlivoFrameSerializer
+# from pipecat.serializers.vobiz import VobizFrameSerializer
 # from pipecat.services.whisper.stt import WhisperSTTService, Model
 from pipecat.services.sarvam.stt import SarvamSTTService
 
@@ -41,6 +39,8 @@ from pipecat.transports.websocket.fastapi import (
     FastAPIWebsocketParams,
     FastAPIWebsocketTransport,
 )
+
+from pipecat.services.sarvam.tts import SarvamTTSService
 
 load_dotenv(override=True)
 
@@ -145,10 +145,15 @@ async def run_bot(
                        the injector is skipped entirely (zero overhead).
     """
 
+    # llm = OpenAILLMService(
+    #     api_key="local",
+    #     base_url=os.getenv("LOCAL_LLM_URL", "http://164.52.198.104:8049/v1"),
+    #     model=os.getenv("LOCAL_LLM_MODEL", "Qwen/Qwen3-14B"),
+    # )
+
     llm = OpenAILLMService(
-        api_key="local",
-        base_url=os.getenv("LOCAL_LLM_URL", "http://164.52.198.104:8049/v1"),
-        model=os.getenv("LOCAL_LLM_MODEL", "Qwen/Qwen3-14B"),
+        api_key=os.getenv("OPENAI_API_KEY", ""),
+        model="gpt-4-o-mini",
     )
 
     stt = SarvamSTTService(
@@ -216,22 +221,18 @@ async def run_bot(
     agent_name   = "Rajesh"
     agent_gender = "male"
 
-    if language == "Telugu":
-        tts = CartesiaTTSService(
-            api_key=os.getenv("CARTESIA_API_KEY", ""),
-            voice_id="6baae46d-1226-45b5-a976-c7f9b797aae2",
-            model="sonic-3",
-            sample_rate=8000,
-        )
-        logger.info(f"TTS: Cartesia sonic-3 (Telugu, {call_day})")
-    else:
-        tts = ElevenLabsTTSService(
-            api_key=os.getenv("ELEVENLABS_API_KEY", ""),
-            voice_id="xnx6sPTtvU635ocDt2j7",
-            model="eleven_flash_v2_5",
-            sample_rate=8000,
-        )
-        logger.info(f"TTS: ElevenLabs eleven_flash_v2_5 ({language}, {call_day})")
+    _lang_code_map = {
+        "English": "en-IN",
+        "Hindi":   "hi-IN",
+        "Telugu":  "te-IN",
+    }
+    tts = SarvamTTSService(
+        api_key=os.getenv("SARVAM_API_KEY", ""),
+        target_language_code=_lang_code_map.get(language, "en-IN"),
+        model="bulbul:v3",
+        speaker="ratan",
+    )
+    logger.info(f"TTS: Sarvam bulbul:v3 ratan ({language} → {_lang_code_map.get(language, 'en-IN')}, {call_day})")
 
     rag_injector = RAGContextInjector(kb_id=kb_id) if kb_id else None
     if kb_id:
@@ -239,9 +240,9 @@ async def run_bot(
 
     hindi_verb    = "बोल रही हूँ" if agent_gender == "female" else "बोल रहा हूँ"
     greetings = {
-        "English": f"Hi I am {agent_name} from OptiMotion, is this {rider_name}?",
-        "Hindi":   f"नमस्ते, मैं {agent_name} {hindi_verb} OptiMotion से, क्या आप {rider_name} बोल रहे ?",
-        "Telugu":  f"హలో, నేను {agent_name} ని, OptiMotion నుండి. మీరు {rider_name} గారు మాట్లాడుతున్నారా?",
+        "English": f"Hi, I am {agent_name} from OptiMotion, is this {rider_name}?",
+        "Hindi":   f"Hi, मैं {agent_name} {hindi_verb} OptiMotion से। क्या आप {rider_name} हैं?",
+        "Telugu":  f"Hi, నేను {agent_name}, OptiMotion నుండి। మీరు {rider_name} గారా?",
     }
     greeting_text = greetings.get(language, greetings["English"])
 
@@ -262,40 +263,13 @@ async def run_bot(
     _common_conversation_rules = f"""
         HOW TO HANDLE THE CONVERSATION:
 
-        BEFORE EVERY RESPONSE — read the full conversation history and ask yourself:
-          "What exactly did the rider just say? Have I already said this in a previous turn?"
-          Never repeat information you already gave. Each response must directly address what the rider just said.
-          you already introduced, do not intruduce yourself again
-
-        STEP 1 — Confirm identity:
-          Wrong number or not available → apologize briefly, say goodbye, STOP.
-
-        STEP 2 — State the purpose ONCE:
-          Mention the due amount and the WhatsApp payment link EXACTLY ONCE in the entire call.
-          After you have mentioned the link — do NOT bring it up again, even if the rider says "okay" or "I'll pay".
-
-        STEP 3 — Respond to what the rider actually said:
-          a) Rider agrees / says they'll pay / says "okay" / says "alright":
-             → One short acknowledgement + goodbye. STOP. Do NOT repeat the WhatsApp link. Do NOT say "let me know once you pay."
-          b) Rider says already paid:
-             → Appreciate it, say it may take a few hours to reflect, say goodbye, STOP.
-          c) Rider REFUSES to pay or disputes the amount:
-             → Do NOT argue. Say "I'll raise this with our support team they'll call you back soon." ask them if they have any more questions and end the call.
-          d) Rider says vehicle is not working / has a problem / raises any complaint:
-             → Say "I'll pass this to our support team right away they'll call you back".  ask them if they have any more questions and end the call, Say goodbye, STOP.
-          e) Rider goes off-topic or asks something unrelated:
-             → Acknowledge briefly, say "I'll pass this to our support team, they'll get back to you." Say goodbye, STOP.
-          f) Rider is rude, silent, or keeps repeating the same thing:
-             → Politely say goodbye, STOP.
-
-        Never make up information not provided above.
-        AMOUNT RULE — CRITICAL: The amount is "{amount} rupees". Say it EXACTLY as "{amount} rupees". NEVER translate "{amount}" into Hindi or Telugu.
-        Correct Hindi: "आपका {amount} rupees बकाया है।" — WRONG: "आपका दो हज़ार रुपये बकाया है।"
-        Correct Telugu: "మీకు {amount} రూపాయలు బాకీ ఉంది" — WRONG: "మీకు రెండు వేల రూపాయలు బాకీ ఉంది"
+        After greeting is done, tell the user that their vechile plan status with respect to plan end date {end_date_words}, and tell them that the about they should pay to continue with the plan is {amount}, tell them that the payment link is already sent via whatsapp and ask the user to pay via link.
+        continue the conversation answer user queries. Any question you dont have information, tell them that you are going to raise this issue with the support team and support team will get back to the customer really soon. Never repeat the sentence that user has already said. Always respond in a warm, human-like manner
     """
 
     _language_block = f"""
-        STRICTLY LANGUAGE — Always respond in the SAME language the user is currently speaking. Detect it from their message and match it immediately. If they switch language mid-call, switch with them in the very next response If you receive hindi text as input strictly return hindi text, if you receive english text as input strictly return english text, if you receive telugu text as input strictly return telugu text. YOU CAN GENERATE RESPONSE ONLY IN 3 LANGUAGES ENGLISH, HINDI, OR TELUGU. NO OTHER LANGUAGE.
+        LANGUAGE — This call starts in {language}. Begin in {language}.
+        Always respond in the SAME language the user is currently speaking. Detect it from their message and match it immediately. If they switch language mid-call, switch with them in the very next response.
 
         NUMBERS RULE — applies in every language, never break this:
         - Amount: always say "{amount} rupees" — NEVER translate "{amount}" into Hindi or Telugu words
@@ -306,22 +280,37 @@ async def run_bot(
         CORRECT: "Your payment of {amount} rupees is due today."
 
         ── Hindi rules ──
-        Style: Warm, casual Hinglish — natural and human, not call-center robotic.
-        Script: Devanagari only.
+        Style: Warm, casual Hinglish — mix English words naturally into every response. Never pure Hindi.
+        Script: Devanagari only for Hindi words — CRITICAL: no Roman transliteration ever, degrades TTS quality.
         Gendered grammar: agent is {agent_gender} → use {"बोल रही हूँ" if agent_gender == "female" else "बोल रहा हूँ"}.
-        MANDATORY substitutions — always use English, never the Hindi equivalent:
+        Sentence endings: every Hindi sentence must end with । (Devanagari danda), NEVER a period (.)
+        Sentence length: keep each sentence under 20 words — long sentences cause unnatural TTS breathing.
+        Line breaks: use \\n between sentences in multi-sentence responses.
+        Avoid Sanskrit-heavy words — use simple colloquial Hindi (खत्म not समाप्त, problem not समस्या).
+        MANDATORY substitutions — always use the English word, never the Hindi equivalent:
           भुगतान → pay | भुगतान करें → pay करें | कृपया → please
+          वाहन → vehicle | सदस्यता → subscription | समस्या → problem
+          धन्यवाद → thank you | कॉलबैक → callback | सहायता → support
+          लॉक → lock | अनलॉक → unlock | लिंक → link
         CORRECT: "please WhatsApp पर भेजे गए link से {amount} rupees pay करें।"
+        CORRECT: "मैं यह issue support team को raise करता हूँ, वो आपको call back करेंगे।"
+        CORRECT: "आपका vehicle अभी lock है, {amount} rupees pay करने के बाद unlock होगा।"
         WRONG:   "कृपया दो हज़ार रुपये का भुगतान करें।"
 
         ── Telugu rules ──
-        Style: Casual Hyderabadi Telugu mixed with English words. Never use formal or pure Telugu.
-        Script: Telugu script only.
-        MANDATORY substitutions — always use the English word:
+        Style: Casual Indian Telugu mixed with English words naturally. Never formal or pure Telugu.Also make sure you are giving sentences in a proper format without any grammatical errors.Also make sure to give meaningful sentences which are easy to understand for the customers.
+        Script: Telugu script only for all Telugu words — CRITICAL: no Roman transliteration ever, degrades TTS quality.
+        Sentence endings: every Telugu sentence must end with । (danda), NEVER a period (.)
+        Sentence length: keep each sentence under 20 words — long sentences cause unnatural TTS breathing.
+        Line breaks: use \\n between sentences in multi-sentence responses.
+        MANDATORY substitutions — always use the English word, never the Telugu equivalent:
           వాహనం → vehicle | చెల్లింపు → pay | చెల్లించండి → pay చేయండి
           దయచేసి → please | ధన్యవాదాలు → thank you | సేవ → service
-          ప్రణాళిక → plan | సమాచారం → information
-        CORRECT: "please WhatsApp లో పంపిన link ద్వారా {amount} rupees pay చేయండి."
+          ప్రణాళిక → plan | సమాచారం → information | సభ్యత్వం → subscription
+          సమస్య → problem | మద్దతు → support | లాక్ → lock | అన్‌లాక్ → unlock
+        CORRECT: "please WhatsApp లో పంపిన link ద్వారా {amount} rupees pay చేయండి।"
+        CORRECT: "నేను ఈ issue support team కి raise చేస్తాను, వాళ్ళు మీకు call back చేస్తారు।"
+        CORRECT: "మీ vehicle ఇప్పుడు lock అయింది, {amount} rupees pay చేసిన తర్వాత unlock అవుతుంది।"
         WRONG:   "దయచేసి రెండు వేల రూపాయలు చెల్లించండి."
     """
 
@@ -332,6 +321,11 @@ async def run_bot(
         - Never write "Rs." — always say "rupees" in words
         - Vehicle model without hyphens: EV-3 → E V 3
         - Company name is always "OptiMotion"
+        - Hindi and Telugu sentences must end with । (danda), never a period
+        - Keep every sentence under 20 words — Sarvam TTS breathes unnaturally on long sentences
+        - Never use ellipsis (...) — causes choppy robotic delivery in Sarvam TTS
+        - Use \\n between sentences in multi-sentence responses
+        - No Roman transliteration of any Hindi or Telugu words — CRITICAL for TTS quality
     """
 
     # ── Per-day templates ──────────────────────────────────────────────────────
@@ -340,6 +334,7 @@ async def run_bot(
         system_content = f"""
         You are {agent_name}, a {agent_gender} collection agent calling on behalf of OptiMotion.
         You are calling {rider_name} about their {vehicle_model} subscription plan — payment is due TODAY.
+        You have very good understanding in all three languages: English, Hindi and Telugu.You can Understand and speak in all three languages fluently. Make sure you give proper responses with proper sentence formations in all three languages. The call can start in any of the three languages, so be prepared to switch between them as needed.
 
         YOUR SITUATION:
         Today is the payment due date. The rider has not paid yet.
@@ -359,11 +354,13 @@ async def run_bot(
         system_content = f"""
         You are {agent_name}, a {agent_gender} collection agent calling on behalf of OptiMotion.
         You are calling {rider_name} about their {vehicle_model} subscription — payment was due YESTERDAY and has not been received.
+        You have very good understanding in all three languages: English, Hindi and Telugu.You can Understand and speak in all three languages fluently. Make sure you give proper responses with proper sentence formations in all three languages. The call can start in any of the three languages, so be prepared to switch between them as needed.
 
         YOUR SITUATION:
         Payment is 1 day overdue the subscription day was {end_date_words}, today its 1 day after subscription date. If the rider does not pay TODAY, their vehicle will be locked tomorrow.
         Be firm and direct. Slightly annoyed but still professional. Sound like a real human — not a call-center robot.
-        A touch of dry humour is okay — e.g. "better late than never, right?" — but keep it brief.
+        A touch of dry humour is okay — but keep it brief.
+        English: "better late than never, right?" | Hindi: "late है लेकिन okay है, right?" | Telugu: "late అయింది కానీ okay, right?"
 
         YOUR GOAL:
         Make the situation clear ONCE — pay today or vehicle locks tomorrow. Then respond to what the rider says and close.
@@ -378,11 +375,13 @@ async def run_bot(
         system_content = f"""
         You are {agent_name}, a {agent_gender} collection agent calling on behalf of OptiMotion.
         You are calling {rider_name} about their {vehicle_model} subscription — payment is 2 days overdue and the vehicle is NOW LOCKED.
+        You have very good understanding in all three languages: English, Hindi and Telugu.You can Understand and speak in all three languages fluently. Make sure you give proper responses with proper sentence formations in all three languages. The call can start in any of the three languages, so be prepared to switch between them as needed.
 
         YOUR SITUATION:
         The vehicle is locked. The rider needs to pay {amount} rupees immediately to unlock it. The subscription date was {end_date_words}, today its 2 day after subscription date.
         Be very firm and urgent. You are clearly not happy. Sound like a real, slightly frustrated human.
-        Dry humour is okay — e.g. "I'm sure you enjoy walking, but let's fix this." — but do NOT soften the message.
+        Dry humour is okay — but do NOT soften the message.
+        English: "I'm sure you enjoy walking, but let's fix this." | Hindi: "walking enjoy कर रहे हो क्या, chalo fix करते हैं।" | Telugu: "walking enjoy చేస్తున్నారా, let's fix this।"
         The vehicle IS locked. State it clearly, ONCE.
 
         YOUR GOAL:
@@ -399,6 +398,7 @@ async def run_bot(
             " When a 'Relevant context from knowledge base' section appears in the "
             "conversation, use that information to answer the user's question accurately. "
             "NEVER invent job details not present in the provided context."
+            "You have ability to give proper responses with proper sentence formations in Telugu, Hindi, English languages."
         )
 
     logger.info(f"SYSTEM PROMPT ({'─'*60})\n{system_content}\n{'─'*70}")
@@ -460,8 +460,8 @@ async def run_bot(
         logger.info("Call timeout at 55s — wrapping up")
         farewells = {
             "English": "I need to wrap up now. Thank you for your time, have a great day!",
-            "Hindi":   "मुझे अभी बात समाप्त करनी होगी। आपका समय देने के लिए धन्यवाद, शुभ दिन!",
-            "Telugu":  "నేను ఇప్పుడు ముగించాలి. మీ సమయానికి ధన్యవాదాలు, శుభదినం!",
+            "Hindi":   "मुझे अब call end करनी है। आपके time के लिए thank you!",
+            "Telugu":  "నేను ఇప్పుడు call end చేయాలి। మీ time కి thank you!",
         }
         farewell_text = farewells.get(language, farewells["English"])
         await task.queue_frame(TTSSpeakFrame(text=farewell_text))
@@ -500,22 +500,26 @@ async def bot(runner_args: RunnerArguments, transcript_out: Optional[list] = Non
     else:
         logger.info("No kb_id — RAG disabled for this call")
 
-    # serializer = PlivoFrameSerializer(
-    #     stream_id=call_data["stream_id"],
-    #     call_id=call_data["call_id"],
-    #     auth_id=os.getenv("PLIVO_AUTH_ID", ""),
-    #     auth_token=os.getenv("PLIVO_AUTH_TOKEN", ""),
-    # )
-    serializer = VobizFrameSerializer(
+    serializer = PlivoFrameSerializer(
         stream_id=call_data["stream_id"],
         call_id=call_data["call_id"],
-        auth_id=os.getenv("VOBIZ_AUTH_ID", ""),
-        auth_token=os.getenv("VOBIZ_AUTH_TOKEN", ""),
-        params=VobizFrameSerializer.InputParams(
-            vobiz_sample_rate=8000,
+        auth_id=os.getenv("PLIVO_AUTH_ID", ""),
+        auth_token=os.getenv("PLIVO_AUTH_TOKEN", ""),
+        params=PlivoFrameSerializer.InputParams(
+            plivo_sample_rate=8000,
             auto_hang_up=True,
         ),
     )
+    # serializer = VobizFrameSerializer(
+    #     stream_id=call_data["stream_id"],
+    #     call_id=call_data["call_id"],
+    #     auth_id=os.getenv("VOBIZ_AUTH_ID", ""),
+    #     auth_token=os.getenv("VOBIZ_AUTH_TOKEN", ""),
+    #     params=VobizFrameSerializer.InputParams(
+    #         vobiz_sample_rate=8000,
+    #         auto_hang_up=True,
+    #     ),
+    # )
 
     transport = FastAPIWebsocketTransport(
         websocket=runner_args.websocket,

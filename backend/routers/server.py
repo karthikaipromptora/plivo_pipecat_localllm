@@ -126,62 +126,51 @@ async def _analyse_transcript(turns: list[dict]) -> dict:
     return {"sentiment": sentiment, "takeaway": takeaway, "callback": callback}
 
 
-# async def make_plivo_call(
-#     session: aiohttp.ClientSession, to_number: str, from_number: str, answer_url: str
-# ):
-#     """Make an outbound call using Plivo's REST API."""
-#     auth_id = os.getenv("PLIVO_AUTH_ID")
-#     auth_token = os.getenv("PLIVO_AUTH_TOKEN")
-#     if not auth_id:
-#         raise ValueError("Missing Plivo Auth ID (PLIVO_AUTH_ID)")
-#     if not auth_token:
-#         raise ValueError("Missing Plivo Auth Token (PLIVO_AUTH_TOKEN)")
-#     headers = {"Content-Type": "application/json"}
-#     data = {"to": to_number, "from": from_number, "answer_url": answer_url, "answer_method": "POST"}
-#     url = f"https://api.plivo.com/v1/Account/{auth_id}/Call/"
-#     auth = aiohttp.BasicAuth(auth_id, auth_token)
-#     async with session.post(url, headers=headers, json=data, auth=auth) as response:
-#         if response.status != 201:
-#             error_text = await response.text()
-#             raise Exception(f"Plivo API error ({response.status}): {error_text}")
-#         result = await response.json()
-#         return result
-
-
-async def make_vobiz_call(
-    session: aiohttp.ClientSession, to_number: str, from_number: str | None, answer_url: str
+async def make_plivo_call(
+    session: aiohttp.ClientSession, to_number: str, from_number: str, answer_url: str
 ):
-    """Make an outbound call using VoBiz's REST API."""
-    auth_id = os.getenv("VOBIZ_AUTH_ID")
-    auth_token = os.getenv("VOBIZ_AUTH_TOKEN")
-
+    """Make an outbound call using Plivo's REST API."""
+    auth_id = os.getenv("PLIVO_AUTH_ID")
+    auth_token = os.getenv("PLIVO_AUTH_TOKEN")
     if not auth_id:
-        raise ValueError("Missing VoBiz Auth ID (VOBIZ_AUTH_ID)")
+        raise ValueError("Missing Plivo Auth ID (PLIVO_AUTH_ID)")
     if not auth_token:
-        raise ValueError("Missing VoBiz Auth Token (VOBIZ_AUTH_TOKEN)")
-
-    headers = {
-        "Content-Type": "application/json",
-        "X-Auth-ID": auth_id,
-        "X-Auth-Token": auth_token,
-    }
-
-    data = {
-        "to": to_number,
-        "from": from_number,
-        "answer_url": answer_url,
-        "answer_method": "POST",
-    }
-
-    url = f"https://api.vobiz.ai/api/v1/Account/{auth_id}/Call/"
-
-    async with session.post(url, headers=headers, json=data) as response:
+        raise ValueError("Missing Plivo Auth Token (PLIVO_AUTH_TOKEN)")
+    headers = {"Content-Type": "application/json"}
+    data = {"to": to_number, "from": from_number, "answer_url": answer_url, "answer_method": "POST"}
+    url = f"https://api.plivo.com/v1/Account/{auth_id}/Call/"
+    auth = aiohttp.BasicAuth(auth_id, auth_token)
+    async with session.post(url, headers=headers, json=data, auth=auth) as response:
         if response.status != 201:
             error_text = await response.text()
-            raise Exception(f"VoBiz API error ({response.status}): {error_text}")
-
+            raise Exception(f"Plivo API error ({response.status}): {error_text}")
         result = await response.json()
         return result
+
+
+# async def make_vobiz_call(
+#     session: aiohttp.ClientSession, to_number: str, from_number: str | None, answer_url: str
+# ):
+#     """Make an outbound call using VoBiz's REST API."""
+#     auth_id = os.getenv("VOBIZ_AUTH_ID")
+#     auth_token = os.getenv("VOBIZ_AUTH_TOKEN")
+#     if not auth_id:
+#         raise ValueError("Missing VoBiz Auth ID (VOBIZ_AUTH_ID)")
+#     if not auth_token:
+#         raise ValueError("Missing VoBiz Auth Token (VOBIZ_AUTH_TOKEN)")
+#     headers = {
+#         "Content-Type": "application/json",
+#         "X-Auth-ID": auth_id,
+#         "X-Auth-Token": auth_token,
+#     }
+#     data = {"to": to_number, "from": from_number, "answer_url": answer_url, "answer_method": "POST"}
+#     url = f"https://api.vobiz.ai/api/v1/Account/{auth_id}/Call/"
+#     async with session.post(url, headers=headers, json=data) as response:
+#         if response.status != 201:
+#             error_text = await response.text()
+#             raise Exception(f"VoBiz API error ({response.status}): {error_text}")
+#         result = await response.json()
+#         return result
 
 
 def get_websocket_url(host: str):
@@ -324,23 +313,31 @@ async def initiate_outbound_call(request: Request, _user: str = Depends(get_curr
             body_encoded = urllib.parse.quote(body_json)
             answer_url = f"{answer_url}?body_data={body_encoded}"
 
-        # Initiate outbound call via VoBiz
+        # Initiate outbound call via Plivo
         try:
-            call_result = await make_vobiz_call(
+            call_result = await make_plivo_call(
                 session=request.app.state.session,
                 to_number=phone_number,
-                from_number=os.getenv("VOBIZ_PHONE_NUMBER"),
+                from_number=os.getenv("PLIVO_PHONE_NUMBER", ""),
                 answer_url=answer_url,
             )
 
-            # Extract call UUID from VoBiz response
+            # Extract call UUID from Plivo response
             call_uuid = (
                 call_result.get("request_uuid") or call_result.get("call_uuid") or "unknown"
             )
 
         except Exception as e:
-            print(f"Error initiating VoBiz call: {e}")
+            print(f"Error initiating Plivo call: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to initiate call: {str(e)}")
+
+        # ── VoBiz (commented out) ──
+        # call_result = await make_vobiz_call(
+        #     session=request.app.state.session,
+        #     to_number=phone_number,
+        #     from_number=os.getenv("VOBIZ_PHONE_NUMBER"),
+        #     answer_url=answer_url,
+        # )
 
     except HTTPException:
         raise
@@ -407,11 +404,8 @@ async def get_answer_xml(
         if not host:
             raise HTTPException(status_code=400, detail="Unable to determine server host")
 
-        protocol = (
-            "https"
-            if not host.startswith("localhost") and not host.startswith("127.0.0.1")
-            else "http"
-        )
+        # protocol used only for VoBiz base_url/record_callback_url (commented out)
+        # protocol = "https" if not host.startswith("localhost") and not host.startswith("127.0.0.1") else "http"
 
         # Use SERVER_BASE_URL to build WS URL if set (avoids proxy stripping the port)
         server_base_url = os.getenv("SERVER_BASE_URL")
@@ -448,22 +442,28 @@ async def get_answer_xml(
         else:
             ws_url = base_ws_url
 
-        # Build callback URLs for recording
-        server_base_url = os.getenv("SERVER_BASE_URL")
-        base_url = server_base_url.rstrip("/") if server_base_url else f"{protocol}://{host}"
-        record_callback_url = f"{base_url}/recording-ready"
+        # VoBiz recording callback (commented out — not used with Plivo)
+        # server_base_url = os.getenv("SERVER_BASE_URL")
+        # base_url = server_base_url.rstrip("/") if server_base_url else f"{protocol}://{host}"
+        # record_callback_url = f"{base_url}/recording-ready"
 
-        # Generate XML response for VoBiz
-        # <Record> must come before <Stream> to enable call recording.
-        # callbackUrl is called by VoBiz when the MP3 file is ready to download.
+        # Generate XML response for Plivo
         xml_content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Record fileFormat="mp3" maxLength="3600" recordSession="true" callbackUrl="{record_callback_url}" callbackMethod="POST">
-    </Record>
     <Stream bidirectional="true" audioTrack="inbound" contentType="audio/x-mulaw;rate=8000" keepCallAlive="true">
         {ws_url}
     </Stream>
 </Response>"""
+
+        # ── VoBiz XML (commented out) ──
+        # xml_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+        # <Response>
+        #     <Record fileFormat="mp3" maxLength="3600" recordSession="true" callbackUrl="{record_callback_url}" callbackMethod="POST">
+        #     </Record>
+        #     <Stream bidirectional="true" audioTrack="inbound" contentType="audio/x-mulaw;rate=8000" keepCallAlive="true">
+        #         {ws_url}
+        #     </Stream>
+        # </Response>"""
 
         return HTMLResponse(content=xml_content, media_type="application/xml")
 

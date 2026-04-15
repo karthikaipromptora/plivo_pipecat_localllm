@@ -13,7 +13,7 @@ exec vllm serve "$MODEL" \
     --port "$PORT" \
     --quantization fp8 \
     --max-model-len 4096 \
-    --gpu-memory-utilization 0.85 \
+    --gpu-memory-utilization 0.75 \
     --generation-config vllm \
     --default-chat-template-kwargs '{"enable_thinking": false}' \
     --enable-prefix-caching \
