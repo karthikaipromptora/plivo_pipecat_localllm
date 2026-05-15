@@ -1,4 +1,5 @@
 import asyncio
+import aiohttp
 import os
 from typing import Optional
 from dotenv import load_dotenv
@@ -9,10 +10,6 @@ from pipecat.frames.frames import (
     Frame,
     EndFrame,
     LLMContextFrame,
-    LLMRunFrame,
-    StartFrame,
-    BotStartedSpeakingFrame,
-    BotStoppedSpeakingFrame,
     TTSSpeakFrame,
     TranscriptionFrame,
 )
@@ -25,24 +22,33 @@ from pipecat.processors.aggregators.llm_response_universal import (
     LLMContextAggregatorPair,
     LLMUserAggregatorParams,
 )
+from pipecat.services.elevenlabs.tts import ElevenLabsTTSService
+# from pipecat.services.elevenlabs.stt import ElevenLabsRealtimeSTTService, CommitStrategy
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.runner.types import RunnerArguments
 from pipecat.runner.utils import parse_telephony_websocket
 from pipecat.serializers.plivo import PlivoFrameSerializer
 # from pipecat.serializers.vobiz import VobizFrameSerializer
 # from pipecat.services.whisper.stt import WhisperSTTService, Model
-from pipecat.services.sarvam.stt import SarvamSTTService
-from pipecat.services.sarvam.llm import SarvamLLMService
+# from pipecat.services.sarvam.stt import SarvamSTTService
+from pipecat.services.deepgram.stt import DeepgramSTTService
+from deepgram import LiveOptions
+# from pipecat.services.sarvam.llm import SarvamLLMService
 from pipecat.services.openai.llm import OpenAILLMService
-from pipecat.transcriptions.language import Language
+# from pipecat.transcriptions.language import Language
 from pipecat.transports.base_transport import BaseTransport
 from pipecat.transports.websocket.fastapi import (
     FastAPIWebsocketParams,
     FastAPIWebsocketTransport,
 )
+# from pipecat.services.elevenlabs.stt import ElevenLabsRealtimeSTTService, CommitStrategy
+# from pipecat.transcriptions.language import Language
+# from pipecat.services.whisper.stt import WhisperSTTService, Model
+
 
 from pipecat.services.sarvam.tts import SarvamTTSService
-
+# from pipecat.services.whisper.stt import WhisperSTTServiceMLX, MLXModel
+# from pipecat.transcriptions.language import Language
 load_dotenv(override=True)
 
 class RAGContextInjector(FrameProcessor):
@@ -147,52 +153,9 @@ async def run_bot(
     """
 
     llm = OpenAILLMService(
-        api_key="local",
-        base_url=os.getenv("LOCAL_LLM_URL", "http://164.52.198.104:8049/v1"),
-        model="google/gemma-4-26B-A4B-it",
+        api_key=os.getenv("OPENAI_API_KEY", ""),
+        settings=OpenAILLMService.Settings(model="gpt-4o-mini"),
     )
-
-    # llm = OpenAILLMService(
-    #     api_key="local",
-    #     base_url=os.getenv("LOCAL_LLM_URL", "http://164.52.198.104:8049/v1"),
-    #     model=os.getenv("LOCAL_LLM_MODEL", "Qwen/Qwen3-14B"),
-    # )
-
-    # llm = OpenAILLMService(
-    #     api_key=os.getenv("OPENAI_API_KEY", ""),
-    #     model="gpt-4.1-mini",
-    # )
-
-    # llm = SarvamLLMService(
-    #     api_key=os.getenv("SARVAM_API_KEY", ""),
-    #     settings=SarvamLLMService.Settings(model="sarvam-30b"),
-    # )
-
-    stt = SarvamSTTService(
-        api_key=os.getenv("SARVAM_API_KEY", ""),
-        settings=SarvamSTTService.Settings(
-            model="saarika:v2.5",
-            vad_signals=True,
-        ),
-    )
-
-    # stt = SarvamSTTService(
-    #     api_key=os.getenv("SARVAM_API_KEY", ""),
-    #     sample_rate=8000,
-    #     mode="codemix",
-    #     settings=SarvamSTTService.Settings(
-    #         model="saaras:v3",
-    #         language=Language.EN_IN,
-    #         vad_signals=True,
-    #         high_vad_sensitivity=True,
-    #     ),
-    # )
-
-    # stt = WhisperSTTService(
-    #     model=Model.LARGE_V3_TURBO,
-    #     device="cuda",
-    #     compute_type="float16",
-    # )
 
     # Extract rider variables from body_data (sent by the UI via /start)
     from num2words import num2words
@@ -203,6 +166,35 @@ async def run_bot(
     end_date      = b.get("end_date",      "the end date")
     call_day      = b.get("call_day",      "T-2")
     language      = b.get("language",      "English")
+
+    # Create aiohttp session for ElevenLabs services
+    session = aiohttp.ClientSession()
+
+    # ElevenLabs STT - Supports English and Spanish
+    # Language codes: "eng" for English, "spa" for Spanish
+
+    # stt = ElevenLabsRealtimeSTTService(
+    #     api_key=os.getenv("ELEVENLABS_API_KEY", ""),
+    #     settings=ElevenLabsRealtimeSTTService.Settings(
+    #         language=Language.ES,
+    #     ),
+    # )
+
+    stt = DeepgramSTTService(
+        api_key=os.getenv("DEEPGRAM_API_KEY", ""),
+        live_options=LiveOptions(
+            model="nova-3",
+            language="en",
+            smart_format=True,
+            punctuate=True,
+            endpointing=300,
+        ),
+    )
+
+    # stt = WhisperSTTService(
+    #         model=Model.TINY,
+    #         device="cpu",
+    #     )
 
     # Convert amount to English cardinal words so LLM never sees a numeral
     _amount_raw = str(b.get("amount", "")).strip()
@@ -242,29 +234,28 @@ async def run_bot(
 
     agent_name   = "Rajesh"
     agent_gender = "male"
-
-    _lang_code_map = {
-        "English": "en-IN",
-        "Hindi":   "hi-IN",
-        "Telugu":  "te-IN",
-    }
-    tts = SarvamTTSService(
-        api_key=os.getenv("SARVAM_API_KEY", ""),
-        target_language_code=_lang_code_map.get(language, "en-IN"),
-        model="bulbul:v3",
-        speaker="ratan",
+    tts_sample_rate = 24000  # ElevenLabs native / reliable sample rate
+    tts_params = ElevenLabsTTSService.InputParams(
+        speed=1.0,  # modest speed-up to lower end-to-end latency without chipmunking
+        use_speaker_boost=True,
     )
-    logger.info(f"TTS: Sarvam bulbul:v3 ratan ({language} → {_lang_code_map.get(language, 'en-IN')}, {call_day})")
+
+
+    tts = ElevenLabsTTSService(
+        api_key=os.getenv("ELEVENLABS_API_KEY", ""),
+        voice_id=os.getenv("ELEVENLABS_VOICE_ID", "AqTsqzKuY71B3KFBr39g"),
+        model="eleven_turbo_v2_5",
+        sample_rate=tts_sample_rate,
+        params=tts_params,
+    )
 
     rag_injector = RAGContextInjector(kb_id=kb_id) if kb_id else None
     if kb_id:
         logger.info(f"RAG enabled for this call (kb_id={kb_id!r})")
 
-    hindi_verb    = "बोल रही हूँ" if agent_gender == "female" else "बोल रहा हूँ"
     greetings = {
         "English": f"Hi, I am {agent_name} from OptiMotion, is this {rider_name}?",
-        "Hindi":   f"Hi, मैं {agent_name} {hindi_verb} OptiMotion से। क्या आप {rider_name} हैं?",
-        "Telugu":  f"Hi, నేను {agent_name}, OptiMotion నుండి। మీరు {rider_name} గారా?",
+        "Spanish": f"Hola, soy {agent_name} de OptiMotion, ¿es usted {rider_name}?",
     }
     greeting_text = greetings.get(language, greetings["English"])
 
@@ -285,37 +276,38 @@ async def run_bot(
     _common_conversation_rules = f"""
         HOW TO HANDLE THE CONVERSATION:
 
-        After greeting is done, tell the user that their vehicle plan {vehicle_model} status with respect to plan end date {end_date_words}, and tell them that the amout they should pay to continue with the plan is {amount}, tell them that the payment link is already sent via whatsapp and ask the user to pay via link.
+        After greeting is done, tell the user that their vechile plan status with respect to plan end date {end_date_words}, and tell them that the about they should pay to continue with the plan is {amount}, tell them that the payment link is already sent via whatsapp and ask the user to pay via link.
         continue the conversation answer user queries. Any question you dont have information, tell them that you are going to raise this issue with the support team and support team will get back to the customer really soon. Never repeat the sentence that user has already said. Always respond in a warm, human-like manner
-        If user said he already paid, then apologize them and tell them it must not have reflected on our records. Thank them for paying and end the call.
-        If user asks for discounts, please tell discounts are not available, and ask them to do full payment.
-        ALWAYS RESPOND IN THE SAME LANGUAGE USER SPEAKS. IF ENGLISH -> ENGLISH, HINDI -> HINDI, TELUGU -> TELUGU.
+
+
     """
 
     _language_block = f"""
         LANGUAGE — This call starts in {language}. Begin in {language}.
+        Always respond in the SAME language the user is currently speaking. Detect it from their message and match it immediately. If they switch language mid-call, switch with them in the very next response.
 
         NUMBERS RULE — applies in every language, never break this:
-        - Amount: always say "{amount} rupees" — NEVER translate "{amount}" into Hindi or Telugu words
-        - Date: always say "{end_date_words}" — NEVER translate into Hindi or Telugu words
+        - Amount: always say "{amount} rupees" — NEVER translate "{amount}" into Spanish words
+        - Date: always say "{end_date_words}" — NEVER translate into Spanish words
 
         ── English rules ──
         Style: Plain, warm, conversational — not scripted.
         CORRECT: "Your payment of {amount} rupees is due today."
 
-        ── Hindi rules ──
-        Style: Warm, casual Hinglish — mix English words naturally into every response. Never pure Hindi.
-        Script: Devanagari only for Hindi words — CRITICAL: no Roman transliteration ever, degrades TTS quality.
-        Gendered grammar: agent is {agent_gender} → use {"बोल रही हूँ" if agent_gender == "female" else "बोल रहा हूँ"}.
-        Sentence endings: every Hindi sentence must end with । (Devanagari danda), NEVER a period (.)
+        ── Spanish rules ──
+        Style: Warm, conversational Spanish — mix English words naturally into responses where appropriate.
+        Sentence endings: every Spanish sentence must end with . or appropriate punctuation.
         Sentence length: keep each sentence under 20 words — long sentences cause unnatural TTS breathing.
-        Avoid Sanskrit-heavy words — use simple colloquial Hindi (खत्म not समाप्त, problem not समस्या).
-
-        ── Telugu rules ──
-        Style: Casual Indian Telugu mixed with English words naturally. Never formal or pure Telugu.Also make sure you are giving sentences in a proper format without any grammatical errors.Also make sure to give meaningful sentences which are easy to understand for the customers.
-        Script: Telugu script only for all Telugu words — CRITICAL: no Roman transliteration ever, degrades TTS quality.
-        Sentence endings: every Telugu sentence must end with । (danda), NEVER a period (.)
-        Sentence length: keep each sentence under 20 words — long sentences cause unnatural TTS breathing.
+        Line breaks: use \\n between sentences in multi-sentence responses.
+        Use simple, colloquial Spanish. Avoid overly formal language.
+        MANDATORY substitutions — always use the English word, never the Spanish equivalent:
+          pago → pay | vehículo → vehicle | suscripción → subscription | problema → problem
+          gracias → thank you | llamada → call | soporte → support
+          bloqueo → lock | desbloqueo → unlock | enlace → link
+        CORRECT: "Por favor, paga {amount} rupees usando el link enviado por WhatsApp."
+        CORRECT: "Voy a reportar este problema al equipo de soporte, te llamarán pronto."
+        CORRECT: "Tu vehículo está bloqueado, paga {amount} rupees para desbloquearlo."
+        WRONG:   "Por favor paga dos mil rupias."
     """
 
     _format_rules = """
@@ -325,19 +317,21 @@ async def run_bot(
         - Never write "Rs." — always say "rupees" in words
         - Vehicle model without hyphens: EV-3 → E V 3
         - Company name is always "OptiMotion"
-        - Hindi and Telugu sentences must end with । (danda), never a period
-        - Keep every sentence under 20 words — Sarvam TTS breathes unnaturally on long sentences
-        - Never use ellipsis (...) — causes choppy robotic delivery in Sarvam TTS
-        - No Roman transliteration of any Hindi or Telugu words — CRITICAL for TTS quality
+        - Spanish sentences must end with appropriate punctuation
+        - Keep every sentence under 20 words — long sentences cause unnatural TTS breathing
+        - Never use ellipsis (...) — causes choppy robotic delivery in TTS
+        - Use \\n between sentences in multi-sentence responses
+        - No Roman transliteration of any Spanish words — CRITICAL for TTS quality
     """
 
     # ── Per-day templates ──────────────────────────────────────────────────────
+    # Bot supports English and Spanish only
 
     if call_day == "T0":
         system_content = f"""
         You are {agent_name}, a {agent_gender} collection agent calling on behalf of OptiMotion.
         You are calling {rider_name} about their {vehicle_model} subscription plan — payment is due TODAY.
-        You have very good understanding in all three languages: English, Hindi and Telugu.You can Understand and speak in all three languages fluently. Make sure you give proper responses with proper sentence formations in all three languages. The call can start in any of the three languages, so be prepared to switch between them as needed.
+        You have very good understanding in English and Spanish. You can understand and speak in both languages fluently. Make sure you give proper responses with proper sentence formations in both languages. The call can start in English or Spanish, so be prepared to switch between them as needed.
 
         YOUR SITUATION:
         Today is the payment due date. The rider has not paid yet.
@@ -357,13 +351,13 @@ async def run_bot(
         system_content = f"""
         You are {agent_name}, a {agent_gender} collection agent calling on behalf of OptiMotion.
         You are calling {rider_name} about their {vehicle_model} subscription — payment was due YESTERDAY and has not been received.
-        You have very good understanding in all three languages: English, Hindi and Telugu.You can Understand and speak in all three languages fluently. Make sure you give proper responses with proper sentence formations in all three languages. The call can start in any of the three languages, so be prepared to switch between them as needed.
+        You have very good understanding in English and Spanish. You can understand and speak in both languages fluently. Make sure you give proper responses with proper sentence formations in both languages. The call can start in English or Spanish, so be prepared to switch between them as needed.
 
         YOUR SITUATION:
         Payment is 1 day overdue the subscription day was {end_date_words}, today its 1 day after subscription date. If the rider does not pay TODAY, their vehicle will be locked tomorrow.
         Be firm and direct. Slightly annoyed but still professional. Sound like a real human — not a call-center robot.
         A touch of dry humour is okay — but keep it brief.
-        English: "better late than never, right?" | Hindi: "late है लेकिन okay है, right?" | Telugu: "late అయింది కానీ okay, right?"
+        English: "better late than never, right?" | Spanish: "mejor tarde que nunca, ¿verdad?"
 
         YOUR GOAL:
         Make the situation clear ONCE — pay today or vehicle locks tomorrow. Then respond to what the rider says and close.
@@ -378,13 +372,13 @@ async def run_bot(
         system_content = f"""
         You are {agent_name}, a {agent_gender} collection agent calling on behalf of OptiMotion.
         You are calling {rider_name} about their {vehicle_model} subscription — payment is 2 days overdue and the vehicle is NOW LOCKED.
-        You have very good understanding in all three languages: English, Hindi and Telugu.You can Understand and speak in all three languages fluently. Make sure you give proper responses with proper sentence formations in all three languages. The call can start in any of the three languages, so be prepared to switch between them as needed.
+        You have very good understanding in English and Spanish. You can understand and speak in both languages fluently. Make sure you give proper responses with proper sentence formations in both languages. The call can start in English or Spanish, so be prepared to switch between them as needed.
 
         YOUR SITUATION:
         The vehicle is locked. The rider needs to pay {amount} rupees immediately to unlock it. The subscription date was {end_date_words}, today its 2 day after subscription date.
         Be very firm and urgent. You are clearly not happy. Sound like a real, slightly frustrated human.
         Dry humour is okay — but do NOT soften the message.
-        English: "I'm sure you enjoy walking, but let's fix this." | Hindi: "walking enjoy कर रहे हो क्या, chalo fix करते हैं।" | Telugu: "walking enjoy చేస్తున్నారా, let's fix this।"
+        English: "I'm sure you enjoy walking, but let's fix this." | Spanish: "Seguro que disfrutas caminando, pero vamos a arreglar esto."
         The vehicle IS locked. State it clearly, ONCE.
 
         YOUR GOAL:
@@ -401,6 +395,7 @@ async def run_bot(
             " When a 'Relevant context from knowledge base' section appears in the "
             "conversation, use that information to answer the user's question accurately. "
             "NEVER invent job details not present in the provided context."
+            "You have ability to give proper responses with proper sentence formations in English and Spanish languages."
         )
 
     logger.info(f"SYSTEM PROMPT ({'─'*60})\n{system_content}\n{'─'*70}")
@@ -446,6 +441,7 @@ async def run_bot(
         ),
     )
 
+
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, client):
         logger.info(f"Call started — RAG {'enabled' if kb_id else 'disabled'}")
@@ -462,8 +458,7 @@ async def run_bot(
         logger.info("Call timeout at 55s — wrapping up")
         farewells = {
             "English": "I need to wrap up now. Thank you for your time, have a great day!",
-            "Hindi":   "मुझे अब call end करनी है। आपके time के लिए thank you!",
-            "Telugu":  "నేను ఇప్పుడు call end చేయాలి। మీ time కి thank you!",
+            "Spanish": "Necesito terminar la llamada ahora. ¡Gracias por tu tiempo, que tengas un excelente día!",
         }
         farewell_text = farewells.get(language, farewells["English"])
         await task.queue_frame(TTSSpeakFrame(text=farewell_text))
@@ -483,6 +478,7 @@ async def run_bot(
                 if role in ("user", "assistant") and isinstance(content, str) and content.strip():
                     transcript_out.append({"role": role, "text": content})
             logger.info(f"Transcript snapshot: {len(transcript_out)} turns")
+        await session.close()
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -512,16 +508,6 @@ async def bot(runner_args: RunnerArguments, transcript_out: Optional[list] = Non
             auto_hang_up=True,
         ),
     )
-    # serializer = VobizFrameSerializer(
-    #     stream_id=call_data["stream_id"],
-    #     call_id=call_data["call_id"],
-    #     auth_id=os.getenv("VOBIZ_AUTH_ID", ""),
-    #     auth_token=os.getenv("VOBIZ_AUTH_TOKEN", ""),
-    #     params=VobizFrameSerializer.InputParams(
-    #         vobiz_sample_rate=8000,
-    #         auto_hang_up=True,
-    #     ),
-    # )
 
     transport = FastAPIWebsocketTransport(
         websocket=runner_args.websocket,
